@@ -1,0 +1,6 @@
+3/02/26
+-Hemos creado el GitHub para organizárnoslo todo en el repositorio incluido este Log.
+-He comenzado a investigar sobre react native para escalar el proyecto mas tarde a otras plataformas
+-He comenzado a investigar sobre fast-api y la he conseguido hilar con js, cosa que une mi trabajo con el de Amin quien esta aprendiendo fast-api a fondo.
+-Hemos hablado con Alex sobre el aspecto del tutor y ha decidido que en lugar de algo mas cartoon es preferible algo como el showcase de meta-horizon de Mark Zukerberg
+por lo que he decidido que como placeholder usare algo como un readyplayerme
