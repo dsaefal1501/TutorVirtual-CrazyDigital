@@ -1,8 +1,3 @@
-¡Claro! Aquí tienes el documento con el **índice corregido y funcional**. He ajustado los enlaces internos siguiendo la lógica de GitHub (minúsculas, guiones en lugar de espacios y eliminación de puntos en los anclajes para asegurar compatibilidad).
-
-Solo tienes que copiar y pegar esto en tu archivo `.md`:
-
-Entendido, aquí tienes el documento completo con el índice en formato de texto plano (limpio), respetando la jerarquía de secciones para que se visualice correctamente en GitHub sin hipervínculos.
 
 ---
 
@@ -153,6 +148,3 @@ Para el control de versiones se usará **GitHub**, utilizando diferentes ramas p
 
 ## 7 - Bibliografía
 
----
-
-¿Te gustaría que te ayude a rellenar los **Requisitos Funcionales (2.4.1)** o prefieres definir primero la pila tecnológica en la sección de **Software (2.5.1)**?los **Requisitos (2.4)**?
