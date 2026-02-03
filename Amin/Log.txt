@@ -1,0 +1,7 @@
+3/02/2026
+
+He organizado el GitHub
+He creado la estructura del backend
+Sigo estudiando fastapi
+
+
