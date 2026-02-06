@@ -208,7 +208,8 @@ Que acciones podra realizar cada rol en el programa, el grafico esta realizado e
 
 ### 3.3 - Base de datos
 
-<img width="1226" height="822" alt="image" src="https://github.com/user-attachments/assets/d2c59f9d-d7f0-4a44-a4b2-e6377448d81c" />
+<img width="912" height="882" alt="image" src="https://github.com/user-attachments/assets/d48cc4e5-2ac9-4aad-ae86-a8a9c5a7045b" />
+
 
 ## 4 - Implementación
 
