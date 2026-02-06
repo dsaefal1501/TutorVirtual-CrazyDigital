@@ -208,9 +208,7 @@ Que acciones podra realizar cada rol en el programa, el grafico esta realizado e
 
 ### 3.3 - Base de datos
 
-#### 3.3.1 - Diseño Conceptual (ER)
-
-#### 3.3.2 - Diseño lógico (tablas normalizadas)
+<img width="1226" height="822" alt="image" src="https://github.com/user-attachments/assets/d2c59f9d-d7f0-4a44-a4b2-e6377448d81c" />
 
 ## 4 - Implementación
 
