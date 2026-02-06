@@ -1,0 +1,97 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE Licencias (
+    id SERIAL PRIMARY KEY,
+    cliente VARCHAR(150) NOT NULL,
+    max_alumnos INT NOT NULL DEFAULT 50,
+    fecha_inicio DATE DEFAULT CURRENT_DATE,
+    fecha_fin DATE,
+    activa BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE Usuarios (
+    id SERIAL PRIMARY KEY,
+    licencia_id INT REFERENCES Licencias(id) ON DELETE SET NULL,
+    nombre VARCHAR(100),
+    email VARCHAR(150) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    rol VARCHAR(20) CHECK (rol IN ('ALUMNO', 'INSTRUCTOR', 'COMERCIAL', 'ADMIN')),
+    activo BOOLEAN DEFAULT TRUE,
+    fecha_creacion TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE Temario (
+    id SERIAL PRIMARY KEY,
+    parent_id INT REFERENCES Temario(id) ON DELETE CASCADE,
+    nombre VARCHAR(200) NOT NULL,
+    descripcion TEXT,
+    nivel INT NOT NULL DEFAULT 1,
+    orden INT DEFAULT 0,
+    activo BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE Base_Conocimiento (
+    id SERIAL PRIMARY KEY,
+    temario_id INT REFERENCES Temario(id) ON DELETE CASCADE,
+    contenido TEXT NOT NULL,
+    embedding VECTOR(1536),
+    metadatos JSONB DEFAULT '{}'
+);
+
+CREATE TABLE Tests (
+    id SERIAL PRIMARY KEY,
+    temario_id INT REFERENCES Temario(id) ON DELETE SET NULL,
+    titulo VARCHAR(200) NOT NULL,
+    contenido_examen JSONB NOT NULL,
+    fecha_creacion TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE Intentos_Alumno (
+    id SERIAL PRIMARY KEY,
+    alumno_id INT REFERENCES Usuarios(id) ON DELETE CASCADE,
+    test_id INT REFERENCES Tests(id) ON DELETE CASCADE,
+    nota_final DECIMAL(5, 2),
+    respuestas_alumno JSONB,
+    fecha_realizacion TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE Sesiones_Chat (
+    id SERIAL PRIMARY KEY,
+    alumno_id INT REFERENCES Usuarios(id) ON DELETE CASCADE,
+    temario_id INT REFERENCES Temario(id) ON DELETE SET NULL,
+    titulo_resumen VARCHAR(200),
+    fecha_inicio TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE Mensajes_Chat (
+    id SERIAL PRIMARY KEY,
+    sesion_id INT REFERENCES Sesiones_Chat(id) ON DELETE CASCADE,
+    rol VARCHAR(20) CHECK (rol IN ('user', 'assistant', 'system')),
+    texto TEXT,
+    embedding VECTOR(1536),
+    info_tecnica JSONB DEFAULT '{}',
+    fecha TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE Configuracion (
+    clave VARCHAR(100) PRIMARY KEY,
+    valor TEXT NOT NULL,
+    descripcion VARCHAR(255)
+);
+
+CREATE TABLE Metricas_Consumo (
+    id SERIAL PRIMARY KEY,
+    usuario_id INT REFERENCES Usuarios(id) ON DELETE SET NULL,
+    servicio VARCHAR(50),
+    tokens_gastados INT,
+    coste DECIMAL(10, 6),
+    fecha TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE Logs_Errores (
+    id SERIAL PRIMARY KEY,
+    origen VARCHAR(50),
+    nivel VARCHAR(20),
+    mensaje TEXT,
+    fecha TIMESTAMP DEFAULT NOW()
+);
