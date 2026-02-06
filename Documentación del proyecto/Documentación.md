@@ -189,8 +189,11 @@ PostgreSQL
 
 ### 3.1 - Modelados
 
+
 #### 3.1.1 - Casos de uso
 
+Que acciones podra realizar cada rol en el programa, el grafico esta realizado en mermaid el código de este esta en al carpeta recursos
+<img width="1185" height="859" alt="image" src="https://github.com/user-attachments/assets/5ffccd40-e2c8-42f1-ac21-d01297cfa386" />
 #### 3.1.2 - Interacción
 
 #### 3.1.3 - Estado
