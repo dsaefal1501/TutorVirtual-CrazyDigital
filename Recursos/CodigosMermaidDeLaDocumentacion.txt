@@ -1,0 +1,56 @@
+Casos de uso:
+flowchart LR
+ subgraph G_Actores[" "]
+    direction TB
+        A["Actor: Alumno"]
+        I["Actor: Instructor"]
+        C["Actor: Comercial"]
+        D["Actor: Admin TI"]
+  end
+ subgraph G_Sistema["**Funcionalidades del Sistema**"]
+    direction TB
+        UC_Login["Login / Autenticación"]
+        UC_Chat["Chat IA (Voz/Texto)"]
+        UC_Avatar["Visualizar Avatar 3D"]
+        UC_Dash["Ver Dashboard / Notas"]
+        UC_Alta["Gestionar alumnos Alumno"]
+        UC_Lic["Gestionar Licencias"]
+        UC_Estado["Suspender Servicio"]
+        UC_Logs["Ver Logs / Errores"]
+        UC_ALTAC["Gestionar comerciales"]
+        UC_Config["Configurar Parámetros"]
+  end
+    A --> UC_Login & UC_Chat & UC_Avatar
+    I --> UC_Login & UC_Dash & UC_Alta
+    C --> UC_Login & UC_Lic & UC_Estado
+    D --> UC_Login & UC_Logs & UC_Config & UC_ALTAC
+    UC_Login ----> SysNode["Backend / API"]
+    UC_Chat ----> SysNode
+    UC_Dash ----> SysNode
+    UC_Alta ----> SysNode
+    UC_Lic ----> SysNode
+    UC_Estado ----> SysNode
+    UC_Logs ----> SysNode
+    UC_Config ----> SysNode
+    A ~~~ I
+    I ~~~ C
+    C ~~~ D
+
+     A:::actorStyle
+     I:::actorStyle
+     C:::actorStyle
+     D:::actorStyle
+     UC_Login:::caseStyle
+     UC_Chat:::caseStyle
+     UC_Avatar:::caseStyle
+     UC_Dash:::caseStyle
+     UC_Alta:::caseStyle
+     UC_Lic:::caseStyle
+     UC_Estado:::caseStyle
+     UC_Logs:::caseStyle
+     UC_ALTAC:::caseStyle
+     UC_Config:::caseStyle
+     SysNode:::systemStyle
+    classDef actorStyle fill:#1e1e1e,stroke:#999,stroke-width:2px,color:#fff,text-align:left
+    classDef caseStyle fill:#333,stroke:#666,stroke-width:1px,color:#eaeaea,rx:0,ry:0
+    classDef systemStyle fill:#1e1e1e,stroke:#fff,stroke-width:2px,color:#fff
