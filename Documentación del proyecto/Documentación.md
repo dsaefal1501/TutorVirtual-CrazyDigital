@@ -104,8 +104,7 @@ Estos requisitos definen las interacciones específicas y funciones que el siste
     
 -   **RF-06 Sincronización Labial (Lip-Sync):** El movimiento de los labios del avatar debe estar sincronizado automáticamente con la respuesta de audio generada por la IA.
     
--   **RF-07 Historial de Sesiones:** El alumno debe poder visualizar y acceder a un registro de sus conversaciones anteriores con el tutor.
-    
+-   **RF-07 Historial de Sesiones:** El alumno debe poder visualizar y acceder a un registro de sus conversaciones anteriores con el tutor en el historial de sesiones se deben alamacenar tanto las emociones del usuario como de la ia para poder trabajar con esto.  
 
 **Gestión Académica y Supervisión (Rol Instructor)**
 
@@ -113,21 +112,23 @@ Estos requisitos definen las interacciones específicas y funciones que el siste
     
 -   **RF-09 Panel del Instructor (Dashboard):** El sistema debe proporcionar una interfaz exclusiva para instructores donde puedan buscar alumnos y visualizar sus estadísticas de progresión mediante gráficos.
 
-- **RF-10 Gestión de alumnos**: El sistema debe dar opción al instructor para dar de alta a alumnos mediante el correo del alumno donde se le genera una contraseña aleatoria que sirve para el primer acceso luego será obligatorio cambiar la contraseña
-
+-   **RF-10 Gestión de alumnos**: El sistema debe dar opción al instructor para dar de alta a alumnos mediante el correo del alumno donde se le genera una contraseña aleatoria que sirve para el primer acceso luego será obligatorio cambiar la contraseña
+   
+-   **RF-11 Subir contenido:** El sistema debe dar opción al de subir temario y tests a la aplicación
+ 
 **Gestión Administrativa y Comercial (Rol Vendedor/Admin)**
 
--   **RF-11 Gestión de Licencias y Suscripciones:** El sistema debe proporcionar un panel de administración que permita a los vendedores generar, asignar y revocar licencias de acceso para instituciones o usuarios individuales.
+-   **RF-12 Gestión de Licencias y Suscripciones:** El sistema debe proporcionar un panel de administración que permita a los vendedores generar, asignar y revocar licencias de acceso para instituciones o usuarios individuales.
     
--   **RF-12 Control de Vigencia (Temporizador):** El sistema debe validar automáticamente la fecha de caducidad de la suscripción cada vez que un usuario intente iniciar sesión, denegando el acceso si el periodo contratado ha finalizado.
+-   **RF-13 Control de Vigencia (Temporizador):** El sistema debe validar automáticamente la fecha de caducidad de la suscripción cada vez que un usuario intente iniciar sesión, denegando el acceso si el periodo contratado ha finalizado.
     
--   **RF-13 Límites de Usuarios (Cuotas):** El sistema debe permitir al vendedor configurar un límite máximo de alumnos activos por licencia (ej. "Plan Escuela: hasta 500 alumnos") y bloquear nuevos registros si se supera dicha cuota.
+-   **RF-14 Límites de Usuarios (Cuotas):** El sistema debe permitir al vendedor configurar un límite máximo de alumnos activos por licencia (ej. "Plan Escuela: hasta 500 alumnos") y bloquear nuevos registros si se supera dicha cuota.
     
--   **RF-14 Estado del Servicio:** El vendedor debe tener la capacidad de suspender o reactivar manualmente el acceso a una cuenta o institución (por ejemplo, por falta de pago) mediante un interruptor de estado (Activo/Inactivo).
+-   **RF-15 Estado del Servicio:** El vendedor debe tener la capacidad de suspender o reactivar manualmente el acceso a una cuenta o institución (por ejemplo, por falta de pago) mediante un interruptor de estado (Activo/Inactivo).
 	
     **Mantenimiento Técnico y Administración del Sistema (Rol Administrador Informático)**
 
--   **RF-15 Configuración de Parámetros Globales:** El sistema debe ofrecer una interfaz técnica para configurar variables críticas sin necesidad de reiniciar el código, tales como:
+-   **RF-16 Configuración de Parámetros Globales:** El sistema debe ofrecer una interfaz técnica para configurar variables críticas sin necesidad de reiniciar el código, tales como:
     
     -   Endpoint (URL) del servidor de autenticación externo.
         
@@ -135,14 +136,13 @@ Estos requisitos definen las interacciones específicas y funciones que el siste
         
     -   Umbrales de latencia máxima permitida.
         
--   **RF-16 Visualización de Logs y Errores:** El sistema debe registrar y permitir la consulta filtrada de logs técnicos (registros de eventos), detallando errores de conexión, fallos en la renderización del avatar o excepciones en la respuesta de la IA para facilitar la depuración (debugging).
+-   **RF-17 Visualización de Logs y Errores:** El sistema debe registrar y permitir la consulta filtrada de logs técnicos (registros de eventos), detallando errores de conexión, fallos en la renderización del avatar o excepciones en la respuesta de la IA para facilitar la depuración (debugging).
     
--   **RF-17 Monitorización de Consumo de IA:** El sistema debe mostrar un reporte en tiempo real del uso de tokens o peticiones a la API de Inteligencia Artificial para controlar costes y prevenir saturaciones.
+-   **RF-18 Monitorización de Consumo de IA:** El sistema debe mostrar un reporte en tiempo real del uso de tokens o peticiones a la API de Inteligencia Artificial para controlar costes y prevenir saturaciones.
     
--   **RF-18 Gestión de Copias de Seguridad (Backups):** El sistema debe permitir al administrador ejecutar copias de seguridad manuales y programar copias automáticas de la base de datos local (donde se guarda el progreso y las estadísticas).
+-   **RF-19 Gestión de Copias de Seguridad (Backups):** El sistema debe permitir al administrador ejecutar copias de seguridad manuales y programar copias automáticas de la base de datos local (donde se guarda el progreso y las estadísticas).
     
--   **RF-19 Reinicio de Servicios:** El sistema debe permitir reiniciar módulos específicos (ej. el módulo de voz o el conector con el servidor externo) desde el panel de administración en caso de bloqueo.
-
+-   **RF-20 Reinicio de Servicios:** El sistema debe permitir reiniciar módulos específicos (ej. el módulo de voz o el conector con el servidor externo) desde el panel de administración en caso de bloqueo.
 ### 2.2.2 - No funcionales
 
 **Rendimiento y Latencia**
