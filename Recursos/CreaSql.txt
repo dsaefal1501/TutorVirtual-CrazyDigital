@@ -53,7 +53,17 @@ CREATE TABLE Intentos_Alumno (
     nota_final DECIMAL(5, 2),
     respuestas_alumno JSONB,
     fecha_realizacion TIMESTAMP DEFAULT NOW()
+    
 );
+
+CREATE TABLE Preguntas_Comunes (
+    id SERIAL PRIMARY KEY,
+    pregunta VARCHAR(200),
+    repuesta VARCHAR(200),
+    temario_id INT REFERENCES Temario(id) 
+)
+    
+
 
 CREATE TABLE Sesiones_Chat (
     id SERIAL PRIMARY KEY,
