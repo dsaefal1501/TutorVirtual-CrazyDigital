@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 class PreguntaUsuario(BaseModel):
     usuario_id: int
@@ -16,3 +16,8 @@ class UsuarioCreate(BaseModel):
     email: str
     password: str
     licencia_id: int
+
+class ConocimientoCreate(BaseModel):
+    temario_id: int
+    contenido: str
+    metadatos: Dict[str, Any] = {}
