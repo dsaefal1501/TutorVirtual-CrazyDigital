@@ -1,8 +1,10 @@
+from typing import Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, func
 from app.models.modelos import BaseConocimiento, MensajeChat, SesionChat, Usuario, Temario
-from app.schemas.schemas import PreguntaUsuario, RespuestaTutor
+from app.schemas.schemas import PreguntaUsuario, RespuestaTutor, ConocimientoCreate
 import os
+import time
 try:
     from mistralai import Mistral
 except ImportError:
@@ -49,47 +51,121 @@ def buscar_contexto(db: Session, vector_pregunta: list) -> list[BaseConocimiento
     resultados = db.execute(stmt).scalars().all()
     return resultados
 
+def _obtener_o_crear_sesion(db: Session, usuario_id: int, sesion_id_input: int | None = None) -> SesionChat:
+    """
+    Busca una sesión existente para el usuario o crea una nueva si no existe.
+    Garantiza que el usuario tenga un hilo de conversación continuo.
+    """
+    if sesion_id_input:
+        # Intentar recuperar la sesión específica
+        sesion = db.query(SesionChat).filter(
+            SesionChat.id == sesion_id_input, 
+            SesionChat.alumno_id == usuario_id
+        ).first()
+        if sesion:
+            return sesion
+    
+    # Buscar la última sesión activa del usuario para darle continuidad (Memoria)
+    ultima_sesion = db.query(SesionChat).filter(
+        SesionChat.alumno_id == usuario_id
+    ).order_by(SesionChat.fecha_inicio.desc()).first()
+
+    if ultima_sesion:
+        return ultima_sesion
+
+    # Si no hay ninguna sesión previa, crear una nueva
+    nueva_sesion = SesionChat(
+        alumno_id=usuario_id,
+        titulo_resumen=f"Chat del alumno {usuario_id}", # Se puede actualizar luego con LLM
+        fecha_inicio=func.now()
+    )
+    db.add(nueva_sesion)
+    db.commit()
+    db.refresh(nueva_sesion)
+    return nueva_sesion
+
+def _recuperar_historial(db: Session, sesion_id: int, limite: int = 10) -> list[dict]:
+    """
+    Recupera los últimos mensajes de la sesión para el contexto del LLM.
+    """
+    # IMPORTANTE: Ordenamos DESC para obtener los RECIENTES, luego invertimos
+    historial_msgs = db.query(MensajeChat).filter(
+        MensajeChat.sesion_id == sesion_id
+    ).order_by(MensajeChat.fecha.desc()).limit(limite).all()
+    
+    # Reordenar cronológicamente (Antiguo -> Nuevo) para el chat
+    historial_msgs.reverse() 
+    
+    mensajes_formateados = []
+    for msg in historial_msgs:
+        role = "assistant" if msg.rol == "assistant" else "user"
+        mensajes_formateados.append({"role": role, "content": msg.texto})
+    
+    return mensajes_formateados
+
+def _guardar_mensaje(db: Session, sesion_id: int, rol: str, texto: str):
+    """
+    Guarda un mensaje en el historial.
+    """
+    nuevo_mensaje = MensajeChat(
+        sesion_id=sesion_id,
+        rol=rol,
+        texto=texto
+    )
+    db.add(nuevo_mensaje)
+    db.commit()
+
 def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor:
     """
-    Orquesta todo el flujo: Pregunta -> Embedding -> Búsqueda -> Prompt -> Respuesta
+    Orquesta todo el flujo: Sesión -> Pregunta -> RAG -> Historial -> Respuesta (No Streaming)
     """
-    # 1. Generar Embedding
+    # 1. Gestión de Sesión (Memoria continua)
+    sesion = _obtener_o_crear_sesion(db, pregunta.usuario_id, pregunta.sesion_id)
+    pregunta.sesion_id = sesion.id # Aseguramos que el objeto tenga el ID correcto
+
+    # 2. Generar Embedding y Buscar Contexto
     vector_pregunta = generar_embedding(pregunta.texto)
-    
-    # 2. Buscar Contexto
     contexto_docs = buscar_contexto(db, vector_pregunta)
-    
-    # Unir el texto de los documentos encontrados
     texto_contexto = "\n\n".join([f"- {doc.contenido}" for doc in contexto_docs])
     
-    # Variables de contexto temporal (Hasta que implementemos la búsqueda de usuario real)
-    nombre_usuario = "Estudiante"
-    nivel_usuario = "Principiante"
-    tema_actual = "General"
+    # 3. Datos del Usuario
+    usuario = db.query(Usuario).filter(Usuario.id == pregunta.usuario_id).first()
+    nombre_usuario = usuario.nombre if usuario else "Estudiante"
     
-    # 3. Construir el Prompt
-    # Al usar un AGENT, su personalidad ya está definida en la plataforma de Mistral.
-    # Solo le pasamos el contexto RAG y la pregunta.
-    mensajes = [
-        {"role": "user", "content": f"Contexto recuperado:\n{texto_contexto}\n\nPregunta del usuario ({nombre_usuario}, {nivel_usuario}, Temario: {tema_actual}): {pregunta.texto}"}
-    ]
+    # 4. Construir Prompt con Historial
+    mensajes_llm = _recuperar_historial(db, sesion.id)
+    
+    instrucciones_emociones = (
+        "IMPORTANTE: Inicia TU respuesta SIEMPRE con una de estas etiquetas de emoción que mejor se adapte al contenido: "
+        "[Happy], [Thinking], [Angry], [Neutral], [Explaining]. "
+        "Ejemplo: '[Happy] ¡Hola! Me alegra verte de nuevo.' o '[Explaining] Para resolver esto, primero...'"
+    )
 
-    # 4. Llamar al LLM (AGENT) para generar la respuesta
+    prompt_con_contexto = f"{instrucciones_emociones}\n\nContexto RAG recuperado:\n{texto_contexto}\n\nPregunta del usuario ({nombre_usuario}): {pregunta.texto}"
+    mensajes_llm.append({"role": "user", "content": prompt_con_contexto})
+
+    # Guardar pregunta del usuario
+    _guardar_mensaje(db, sesion.id, "user", pregunta.texto)
+
+    # 5. Llamar al LLM (AGENT)
+    respuesta_texto = ""
     if client:
-        # Usamos el endpoint de Agentes
-        chat_response = client.agents.complete(
-            agent_id=agent_id,
-            messages=mensajes,
-        )
-        respuesta_texto = chat_response.choices[0].message.content
+        try:
+            chat_response = client.agents.complete(
+                agent_id=agent_id,
+                messages=mensajes_llm,
+            )
+            respuesta_texto = chat_response.choices[0].message.content
+        except Exception as e:
+            respuesta_texto = f"[Neutral] Error al comunicar con Mistral: {str(e)}"
     else:
-        respuesta_texto = "[NEUTRAL] Error: No se configuró la API Key de Mistral. (Modo Simulación)"
+        respuesta_texto = "[Neutral] Error: No API Key (Modo Simulación)"
 
-    # 5. Guardar Logs/Historial (Opcional, pero recomendado)
-    # Aquí podríamos guardar en SesionChat y MensajeChat
-    
+    # 6. Guardar Respuesta
+    _guardar_mensaje(db, sesion.id, "assistant", respuesta_texto)
+
     return RespuestaTutor(
-        sesion_id=pregunta.sesion_id or 0,
+        sesion_id=sesion.id,
         respuesta=respuesta_texto,
         fuentes=[f"ID: {doc.id}" for doc in contexto_docs]
     )
@@ -98,81 +174,119 @@ def preguntar_al_tutor_stream(db: Session, pregunta: PreguntaUsuario):
     """
     Generador para streaming de respuesta (SSE) con PERSISTENCIA y MEMORIA.
     """
-    # 0. Gestión de Sesión (Crear si no existe)
-    if not pregunta.sesion_id:
-        nueva_sesion = SesionChat(
-            alumno_id=pregunta.usuario_id,
-            titulo_resumen=pregunta.texto[:30] + "..." # Título temporal
-        )
-        db.add(nueva_sesion)
-        db.commit()
-        db.refresh(nueva_sesion)
-        pregunta.sesion_id = nueva_sesion.id
-        # IMPORTANTE: Enviar el ID de sesión primero para que el cliente sepa dónde seguir
-        yield f"__SESION_ID__:{nueva_sesion.id}\n"
-
-    # 1. Recuperar Historial de Chat (Memoria)
-    historial_msgs = db.query(MensajeChat).filter(
-        MensajeChat.sesion_id == pregunta.sesion_id
-    ).order_by(MensajeChat.fecha.asc()).limit(10).all() # Últimos 10 mensajes
-
-    # 2. Contexto Usuario
-    usuario = db.query(Usuario).filter(Usuario.id == pregunta.usuario_id).first()
-    nombre_usuario = usuario.nombre if usuario else "Estudiante"
-    tema_actual = "General"
-    nivel_usuario = "Principiante"
+    # 1. Gestión de Sesión
+    sesion = _obtener_o_crear_sesion(db, pregunta.usuario_id, pregunta.sesion_id)
     
-    # 3. Embedding y Búsqueda RAG
+    # Enviar ID al cliente primero
+    if sesion.id != pregunta.sesion_id:
+        yield f"__SESION_ID__:{sesion.id}\n"
+    pregunta.sesion_id = sesion.id 
+
+    # 2. Contexto y RAG
     vector_pregunta = generar_embedding(pregunta.texto)
     contexto_docs = buscar_contexto(db, vector_pregunta)
     texto_contexto = "\n\n".join([f"- {doc.contenido}" for doc in contexto_docs])
 
-    # 4. Construir Mensajes para el Agente (System + History + RAG + User)
-    mensajes_para_llm = []
-    
-    # a) Historial previo
-    for msg in historial_msgs:
-        role = "assistant" if msg.rol == "assistant" else "user"
-        mensajes_para_llm.append({"role": role, "content": msg.texto})
+    usuario = db.query(Usuario).filter(Usuario.id == pregunta.usuario_id).first()
+    nombre_usuario = usuario.nombre if usuario else "Estudiante"
 
-    # b) Mensaje actual con RAG
-    prompt_usuario = f"Contexto RAG recuperado:\n{texto_contexto}\n\nPregunta del usuario ({nombre_usuario}, {nivel_usuario}): {pregunta.texto}"
-    mensajes_para_llm.append({"role": "user", "content": prompt_usuario})
+    # 3. Historial
+    mensajes_llm = _recuperar_historial(db, sesion.id)
 
-    # 5. Guardar Pregunta del Usuario en DB
-    msg_usuario = MensajeChat(
-        sesion_id=pregunta.sesion_id,
-        rol="user",
-        texto=pregunta.texto,
-        # embedding=vector_pregunta # Opcional: guardar embedding de la pregunta
+    instrucciones_emociones = (
+        "IMPORTANTE: Inicia TU respuesta SIEMPRE con una de estas etiquetas de emoción que mejor se adapte al contenido: "
+        "[Happy], [Thinking], [Angry], [Neutral], [Explaining]. "
+        "Ejemplo: '[Happy] ¡Claro que sí!' o '[Thinking] Déjame analizar eso...'"
     )
-    db.add(msg_usuario)
-    db.commit()
 
-    # 6. Llamar al Agente en Streaming
+    prompt_con_contexto = f"{instrucciones_emociones}\n\nContexto RAG recuperado:\n{texto_contexto}\n\nPregunta del usuario ({nombre_usuario}): {pregunta.texto}"
+    mensajes_llm.append({"role": "user", "content": prompt_con_contexto})
+
+    # Guardar pregunta
+    _guardar_mensaje(db, sesion.id, "user", pregunta.texto)
+
+    # 4. Llamar al Agente en Streaming
     texto_completo_respuesta = ""
     
     if client:
-        stream_response = client.agents.stream(
-            agent_id=agent_id,
-            messages=mensajes_para_llm,
-        )
-        
-        for chunk in stream_response:
-            content = chunk.data.choices[0].delta.content
-            if content:
-                texto_completo_respuesta += content
-                yield content
+        try:
+            stream_response = client.agents.stream(
+                agent_id=agent_id,
+                messages=mensajes_llm,
+            )
+            
+            for chunk in stream_response:
+                content = chunk.data.choices[0].delta.content
+                if content:
+                    texto_completo_respuesta += content
+                    yield content
+        except Exception as e:
+            yield f"[Neutral] Error stream: {str(e)}"
     else:
-        err_msg = "[NEUTRAL] Error: No API Key."
+        err_msg = "[Neutral] Error: No API Key."
         texto_completo_respuesta = err_msg
         yield err_msg
 
-    # 7. Guardar Respuesta del Agente en DB (una vez finalizado el stream)
-    msg_asistente = MensajeChat(
-        sesion_id=pregunta.sesion_id,
-        rol="assistant", 
-        texto=texto_completo_respuesta
+    # 5. Guardar Respuesta completa
+    _guardar_mensaje(db, sesion.id, "assistant", texto_completo_respuesta)
+
+def agregar_conocimiento(db: Session, datos: ConocimientoCreate):
+    """
+    Agrega un nuevo fragmento de conocimiento a la base de datos vectorial.
+    1. Genera el embedding del contenido.
+    2. Guarda en la tabla BaseConocimiento.
+    """
+    # 1. Generar Embedding
+    vector_contenido = generar_embedding(datos.contenido)
+    
+    # 2. Crear registro
+    nuevo_conocimiento = BaseConocimiento(
+        temario_id=datos.temario_id,
+        contenido=datos.contenido,
+        embedding=vector_contenido,
+        metadata_info=datos.metadatos # Mapea al campo 'metadatos' JSON
     )
-    db.add(msg_asistente)
+    
+    db.add(nuevo_conocimiento)
     db.commit()
+    db.refresh(nuevo_conocimiento)
+    return nuevo_conocimiento
+
+def sincronizar_temario_a_conocimiento(db: Session) -> int:
+    """
+    Recorre la tabla Temario y convierte las descripciones en vectores
+    guardándolas en BaseConocimiento si no existen previamente.
+    Retorna la cantidad de nuevos registros creados.
+    """
+    # 1. Obtener todos los temas con descripción
+    temas = db.query(Temario).filter(Temario.descripcion != None).all()
+    count = 0
+
+    for tema in temas:
+        # 2. Verificar si ya existe conocimiento asociado a este tema
+        # (Para evitar duplicados en ejecuciones sucesivas)
+        existe = db.query(BaseConocimiento).filter(BaseConocimiento.temario_id == tema.id).first()
+        if existe:
+            continue
+            
+        contenido_texto = f"Tema: {tema.nombre}. Descripción: {tema.descripcion}"
+        
+        # 3. Generar Embedding
+        vector = generar_embedding(contenido_texto)
+        
+        # 4. Guardar
+        nuevo = BaseConocimiento(
+            temario_id=tema.id,
+            contenido=contenido_texto,
+            embedding=vector,
+            metadata_info={"origen": "migracion_automatica", "nivel": tema.nivel}
+        )
+        db.add(nuevo)
+        count += 1
+        
+        # Rate Limit Mitigation: Esperar 1 segundo entre llamados a la API
+        print(f"Procesado tema {tema.id} ({tema.nombre}). Esperando...")
+        time.sleep(1)
+    
+    db.commit()
+    return count

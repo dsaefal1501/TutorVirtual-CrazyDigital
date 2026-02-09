@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.db.database import get_db, engine
 from app.models import modelos
-from app.schemas.schemas import PreguntaUsuario, RespuestaTutor
+from app.schemas.schemas import PreguntaUsuario, RespuestaTutor, ConocimientoCreate
 from app.crud import rag_service
 
 # Crear las tablas automáticamente (solo para desarrollo)
@@ -58,3 +58,17 @@ def ask_tutor_stream(pregunta: PreguntaUsuario, db: Session = Depends(get_db)):
         rag_service.preguntar_al_tutor_stream(db, pregunta),
         media_type="text/plain"
     )
+
+@app.post("/knowledge/sync")
+def sync_knowledge(db: Session = Depends(get_db)):
+    """
+    Sincroniza AUTOMÁCICAMENTE el contenido de la tabla 'Temario' a la 'BaseConocimiento'.
+    Genera embeddings para todos los temas que tengan descripción y no estén ya procesados.
+    No requiere parámetros.
+    """
+    try:
+        cantidad = rag_service.sincronizar_temario_a_conocimiento(db)
+        return {"mensaje": "Sincronización completada", "registros_nuevos": cantidad}
+    except Exception as e:
+        print(f"Error al sincronizar conocimiento: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
