@@ -269,7 +269,8 @@ def sincronizar_temario_a_conocimiento(db: Session) -> int:
         if existe:
             continue
             
-        contenido_texto = f"Tema: {tema.nombre}. Descripción: {tema.descripcion}"
+        # Inyectamos el Nivel y el Orden directamente en el texto que lee la IA
+        contenido_texto = f"[Jerarquía: Nivel {tema.nivel} - Orden {tema.orden} - PadreID {tema.parent_id}] Tema: {tema.nombre}. Contenido: {tema.descripcion}"
         
         # 3. Generar Embedding
         vector = generar_embedding(contenido_texto)
@@ -279,7 +280,7 @@ def sincronizar_temario_a_conocimiento(db: Session) -> int:
             temario_id=tema.id,
             contenido=contenido_texto,
             embedding=vector,
-            metadata_info={"origen": "migracion_automatica", "nivel": tema.nivel}
+            metadata_info={"origen": "migracion_automatica", "nivel": tema.nivel, "orden": tema.orden, "parent_id": tema.parent_id}
         )
         db.add(nuevo)
         count += 1
