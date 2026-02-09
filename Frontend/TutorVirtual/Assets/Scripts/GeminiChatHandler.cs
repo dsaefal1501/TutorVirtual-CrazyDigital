@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using UnityEditor.UI;
 using UnityEngine.UI;
 using UnityEngine.Networking;
 using TMPro;
@@ -10,21 +9,19 @@ using System.Text;
 public class PostData 
 {
 	public string texto;
-	public int usuario_id = 1; // Añadimos esto para que FastAPI esté contento
+	public int usuario_id = 1; 
 }
 
 public class GeminiChatHandler : MonoBehaviour
 {
 	public TMP_InputField inputField;
-	public TMP_InputField inputFieldPruebaExpresiones;
 	public TextMeshProUGUI textoRespuesta;
-	
+    
 	public Image expressionImage;
 	public Sprite Happy, Thinking, Angry, Neutral, Explaining;
-	
     
 	[Header("Configuración")]
-	[SerializeField] private string ipServidor; // Pon aquí tu IP real si usas móvil
+	[SerializeField] private string ipServidor = "127.0.0.1";
 	private string urlApi;
 
 	void Start()
@@ -32,19 +29,18 @@ public class GeminiChatHandler : MonoBehaviour
 		urlApi = $"http://{ipServidor}:8000/ask/stream";
 		inputField.onSubmit.AddListener(delegate { EnviarAFastApi(); });
 	}
-	
-	// Update is called every frame, if the MonoBehaviour is enabled.
+    
 	protected void Update()
 	{
-		if (inputFieldPruebaExpresiones.text.Contains("feliz"))
+		if (textoRespuesta.text.Contains("Happy"))
 			expressionImage.sprite = Happy;
-		else if (inputFieldPruebaExpresiones.text.Contains("pensando"))
+		else if (textoRespuesta.text.Contains("Thinking"))
 			expressionImage.sprite = Thinking;
-		else if (inputFieldPruebaExpresiones.text.Contains("enfadado"))
+		else if (textoRespuesta.text.Contains("Angry"))
 			expressionImage.sprite = Angry;
-		else if (inputFieldPruebaExpresiones.text.Contains("neutral"))
+		else if (textoRespuesta.text.Contains("Neutral"))
 			expressionImage.sprite = Neutral;
-		else if (inputFieldPruebaExpresiones.text.Contains("explicando"))
+		else if (textoRespuesta.text.Contains("Explaining"))
 			expressionImage.sprite = Explaining;
 	}
 
@@ -52,8 +48,9 @@ public class GeminiChatHandler : MonoBehaviour
 	{
 		if (!string.IsNullOrEmpty(inputField.text))
 		{
-			StartCoroutine(PostRequestStream(inputField.text));
-			inputField.text = "";
+			string mensajeAEnviar = inputField.text;
+			inputField.text = ""; 
+			StartCoroutine(PostRequestStream(mensajeAEnviar));
 		}
 	}
 
