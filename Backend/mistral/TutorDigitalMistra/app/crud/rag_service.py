@@ -291,3 +291,11 @@ def sincronizar_temario_a_conocimiento(db: Session) -> int:
     
     db.commit()
     return count
+
+    def temalogico(db: Session):
+         
+
+      
+
+
+
