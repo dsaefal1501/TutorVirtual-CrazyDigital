@@ -46,7 +46,7 @@ def buscar_contexto(db: Session, vector_pregunta: list) -> list[BaseConocimiento
     # Consulta usando SQLAlchemy 2.0 style
     stmt = select(BaseConocimiento).order_by(
         BaseConocimiento.embedding.cosine_distance(vector_pregunta)
-    ).limit(3)
+    )
     
     resultados = db.execute(stmt).scalars().all()
     return resultados
@@ -291,3 +291,12 @@ def sincronizar_temario_a_conocimiento(db: Session) -> int:
     
     db.commit()
     return count
+
+ 
+
+         
+
+      
+
+
+
