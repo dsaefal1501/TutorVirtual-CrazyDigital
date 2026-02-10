@@ -80,6 +80,7 @@
   <ItemGroup>
     <Compile Include="Assets\Scripts\DeepgramStreaming.cs" />
     <Compile Include="Assets\Scripts\FastApiConnector.cs" />
+    <Compile Include="Assets\Scripts\LoginUIController.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
     <Compile Include="Assets\Scripts\GeminiChatHandler.cs" />
   </ItemGroup>
@@ -224,6 +225,7 @@
     <None Include="Assets\Packages\Microsoft.Extensions.Options.10.0.2\analyzers\dotnet\roslyn4.4\cs\ru\Microsoft.Extensions.Options.SourceGeneration.resources.dll" />
     <None Include="Assets\Packages\Microsoft.Bcl.AsyncInterfaces.10.0.2\lib\netstandard2.1\Microsoft.Bcl.AsyncInterfaces.xml" />
     <None Include="Assets\Packages\System.Text.Json.10.0.1\analyzers\dotnet\roslyn4.4\cs\it\System.Text.Json.SourceGeneration.resources.dll" />
+    <None Include="Assets\HUD\main.uss" />
     <None Include="Assets\Packages\Microsoft.Extensions.FileProviders.Abstractions.10.0.2\THIRD-PARTY-NOTICES.TXT" />
     <None Include="Assets\Packages\System.Text.Json.10.0.1\analyzers\dotnet\roslyn4.4\cs\cs\System.Text.Json.SourceGeneration.resources.dll" />
     <None Include="Assets\Packages\System.Text.Json.10.0.1\analyzers\dotnet\roslyn3.11\cs\ru\System.Text.Json.SourceGeneration.resources.dll" />
@@ -259,6 +261,7 @@
     <None Include="Assets\Packages\System.Text.Json.10.0.1\analyzers\dotnet\roslyn4.0\cs\it\System.Text.Json.SourceGeneration.resources.dll" />
     <None Include="Assets\Packages\Microsoft.Extensions.Configuration.Abstractions.10.0.2\lib\netstandard2.0\Microsoft.Extensions.Configuration.Abstractions.xml" />
     <None Include="Assets\Packages\System.Diagnostics.DiagnosticSource.10.0.2\useSharedDesignerContext.txt" />
+    <None Include="Assets\HUD\TestUser.uxml" />
     <None Include="Assets\SpeechSDK\REDIST.txt" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile Masking.shader" />
     <None Include="Assets\Packages\Microsoft.Bcl.AsyncInterfaces.10.0.2\lib\netstandard2.1\Microsoft.Bcl.AsyncInterfaces.dll" />

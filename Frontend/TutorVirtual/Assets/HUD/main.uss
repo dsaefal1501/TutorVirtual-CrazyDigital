@@ -1,0 +1,71 @@
+.background {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+    /* Color base (el script lo sobrescribirá con el gradiente) */
+    background-color: rgb(210, 227, 248);
+}
+
+.center-container {
+    width: 400px;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.header-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.header-line {
+    flex-grow: 1;
+    height: 1px;
+    background-color: rgb(141, 164, 195);
+}
+
+.header-text {
+    margin-left: 15px;
+    margin-right: 15px;
+    color: rgb(141, 164, 195);
+    font-size: 16px;
+    -unity-font-style: normal;
+    -unity-text-align: middle-center;
+}
+
+.btn-role {
+    width: 300px;
+    height: 60px;
+    background-color: rgb(120, 166, 240);
+    border-radius: 30px;
+    color: white;
+    font-size: 20px;
+    -unity-font-style: normal;
+    
+    /* Sin bordes, ni sombras CSS falsas. El script hace la magia */
+    border-width: 0px;
+    
+    margin-top: 10px;
+    margin-bottom: 10px;
+    -unity-text-align: middle-center;
+}
+
+.btn-role:hover {
+    background-color: rgb(140, 180, 250);
+}
+
+.btn-role:active {
+    background-color: rgb(100, 146, 220);
+    /* Al pulsar, no necesitamos moverlo por CSS, mantendremos la posición simple */
+}
+
+.separator-text {
+    color: rgb(141, 164, 195);
+    font-size: 14px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+    -unity-text-align: middle-center;
+}
