@@ -10,8 +10,9 @@ public class LoginUIController : MonoBehaviour
 
 	[Header("Shadow Settings")]
 	[SerializeField] private Color shadowColor = new Color(0.2f, 0.35f, 0.55f, 0.5f);
+	[SerializeField] private int shadowRadius = 20; 
+	[SerializeField] private float shadowScale = 1.15f; 
 	[SerializeField] private Vector2 shadowOffset = new Vector2(0, 5);
-	[SerializeField] private float buttonCornerRadius = 30f;
 
 	private UIDocument _uiDocument;
 
@@ -20,7 +21,7 @@ public class LoginUIController : MonoBehaviour
 		_uiDocument = GetComponent<UIDocument>();
 		if (_uiDocument == null) return;
         
-		UpdateUI();
+		_uiDocument.rootVisualElement.schedule.Execute(UpdateUI);
 	}
 
 	private void OnValidate()
@@ -28,7 +29,7 @@ public class LoginUIController : MonoBehaviour
 		if (_uiDocument == null) _uiDocument = GetComponent<UIDocument>();
 		if (_uiDocument != null && _uiDocument.rootVisualElement != null)
 		{
-			UpdateUI();
+			_uiDocument.rootVisualElement.schedule.Execute(UpdateUI);
 		}
 	}
 
@@ -38,101 +39,110 @@ public class LoginUIController : MonoBehaviour
 		if (root == null) return;
 
 		var backgroundElement = root.Q<VisualElement>("Background");
-		if (backgroundElement != null)
-		{
-			ApplyGradientBackground(backgroundElement);
-		}
+		if (backgroundElement != null) ApplyGradientBackground(backgroundElement);
 
-		UpdateOrSetupShadow(root.Q<Button>("BtnAlumno"));
-		UpdateOrSetupShadow(root.Q<Button>("BtnInstructor"));
+		SetupButtonShadow(root.Q<Button>("BtnAlumno"));
+		SetupButtonShadow(root.Q<Button>("BtnInstructor"));
 	}
 
-	private void UpdateOrSetupShadow(Button btn)
+	private void SetupButtonShadow(Button btn)
 	{
 		if (btn == null) return;
 
+		// Si el botón no tiene tamaño aun, esperamos
+		if (float.IsNaN(btn.resolvedStyle.width) || btn.resolvedStyle.width < 1)
+		{
+			btn.schedule.Execute(() => SetupButtonShadow(btn));
+			return;
+		}
+
+		// Comprobamos si ya tiene el wrapper
 		if (btn.parent != null && btn.parent.name == "shadow-wrapper")
 		{
 			UpdateExistingShadow(btn.parent);
 		}
 		else
 		{
-			if (float.IsNaN(btn.resolvedStyle.width))
-			{
-				btn.schedule.Execute(() => UpdateOrSetupShadow(btn));
-				return;
-			}
 			CreateShadowWrapper(btn);
 		}
 	}
 
 	private void UpdateExistingShadow(VisualElement wrapper)
 	{
-		var shadow = wrapper.Q<VisualElement>("shadow");
+		// Buscamos nuestro componente Shadow personalizado
+		var shadow = wrapper.Q<Shadow>(); 
 		if (shadow != null)
 		{
-			shadow.style.backgroundColor = shadowColor;
-			shadow.style.top = shadowOffset.y;
-			shadow.style.left = shadowOffset.x;
-			shadow.style.borderTopLeftRadius = buttonCornerRadius;
-			shadow.style.borderTopRightRadius = buttonCornerRadius;
-			shadow.style.borderBottomLeftRadius = buttonCornerRadius;
-			shadow.style.borderBottomRightRadius = buttonCornerRadius;
+			// La propiedad 'color' de VisualElement es la que usa el script Shadow para el tinte central
+			shadow.style.color = shadowColor; 
+			shadow.shadowCornerRadius = shadowRadius;
+			shadow.shadowScale = shadowScale;
+			shadow.shadowOffsetX = (int)shadowOffset.x;
+			shadow.shadowOffsetY = (int)shadowOffset.y;
+            
+			// Forzamos el repintado
+			shadow.MarkDirtyRepaint();
 		}
-
+        
+		// Sincronizamos el radio del botón con el de la sombra para que quede bonito
 		var btn = wrapper.Q<Button>();
 		if (btn != null)
 		{
-			btn.style.borderTopLeftRadius = buttonCornerRadius;
-			btn.style.borderTopRightRadius = buttonCornerRadius;
-			btn.style.borderBottomLeftRadius = buttonCornerRadius;
-			btn.style.borderBottomRightRadius = buttonCornerRadius;
+			// El botón debe tener el mismo radio o un poco menos
+			btn.style.borderTopLeftRadius = shadowRadius;
+			btn.style.borderTopRightRadius = shadowRadius;
+			btn.style.borderBottomLeftRadius = shadowRadius;
+			btn.style.borderBottomRightRadius = shadowRadius;
 		}
 	}
 
 	private void CreateShadowWrapper(Button btn)
 	{
+		// 1. Crear Wrapper
 		VisualElement wrapper = new VisualElement();
 		wrapper.name = "shadow-wrapper";
 		wrapper.style.width = btn.resolvedStyle.width;
 		wrapper.style.height = btn.resolvedStyle.height;
+		// Copiar márgenes para mantener posición
 		wrapper.style.marginTop = btn.resolvedStyle.marginTop;
 		wrapper.style.marginBottom = btn.resolvedStyle.marginBottom;
 		wrapper.style.marginLeft = btn.resolvedStyle.marginLeft;
 		wrapper.style.marginRight = btn.resolvedStyle.marginRight;
         
-		VisualElement shadow = new VisualElement();
-		shadow.name = "shadow";
+		// 2. Crear nuestra Sombra Mesh (Instanciamos la clase Shadow)
+		Shadow shadow = new Shadow();
+		shadow.name = "mesh-shadow";
 		shadow.style.position = Position.Absolute;
 		shadow.style.width = Length.Percent(100);
 		shadow.style.height = Length.Percent(100);
-		shadow.style.backgroundColor = shadowColor;
-		shadow.style.top = shadowOffset.y;
-		shadow.style.left = shadowOffset.x;
-		shadow.style.borderTopLeftRadius = buttonCornerRadius;
-		shadow.style.borderTopRightRadius = buttonCornerRadius;
-		shadow.style.borderBottomLeftRadius = buttonCornerRadius;
-		shadow.style.borderBottomRightRadius = buttonCornerRadius;
+        
+		// Configuramos valores iniciales
+		shadow.style.color = shadowColor;
+		shadow.shadowCornerRadius = shadowRadius;
+		shadow.shadowScale = shadowScale;
+		shadow.shadowOffsetX = (int)shadowOffset.x;
+		shadow.shadowOffsetY = (int)shadowOffset.y;
 
+		// 3. Configurar Botón
 		btn.style.marginTop = 0;
 		btn.style.marginBottom = 0;
 		btn.style.marginLeft = 0;
 		btn.style.marginRight = 0;
 		btn.style.width = Length.Percent(100);
 		btn.style.height = Length.Percent(100);
-		btn.style.borderTopLeftRadius = buttonCornerRadius;
-		btn.style.borderTopRightRadius = buttonCornerRadius;
-		btn.style.borderBottomLeftRadius = buttonCornerRadius;
-		btn.style.borderBottomRightRadius = buttonCornerRadius;
+		btn.style.borderTopLeftRadius = shadowRadius;
+		btn.style.borderTopRightRadius = shadowRadius;
+		btn.style.borderBottomLeftRadius = shadowRadius;
+		btn.style.borderBottomRightRadius = shadowRadius;
 
+		// 4. Intercambiar en jerarquía
 		VisualElement originalParent = btn.parent;
 		int originalIndex = originalParent.IndexOf(btn);
-
 		originalParent.Remove(btn);
-		originalParent.Insert(originalIndex, wrapper);
         
-		wrapper.Add(shadow);
-		wrapper.Add(btn);
+		originalParent.Insert(originalIndex, wrapper);
+		wrapper.Add(shadow); // La sombra va detrás
+		wrapper.Add(btn);    // El botón va delante
 	}
 
 	private void ApplyGradientBackground(VisualElement element)
@@ -143,7 +153,6 @@ public class LoginUIController : MonoBehaviour
 		gradientTexture.filterMode = FilterMode.Bilinear;
 		gradientTexture.wrapMode = TextureWrapMode.Clamp;
 		gradientTexture.Apply();
-
 		element.style.backgroundImage = new StyleBackground(gradientTexture);
 	}
 }
