@@ -930,6 +930,10 @@
       <HintPath>Assets\Packages\Microsoft.Bcl.AsyncInterfaces.10.0.2\lib\netstandard2.1\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Newtonsoft.Json.Bson">
+      <HintPath>Assets\Packages\Newtonsoft.Json.Bson.1.0.3\lib\netstandard2.0\Newtonsoft.Json.Bson.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="System.Runtime.CompilerServices.Unsafe">
       <HintPath>Library\PackageCache\com.unity.collections@aea9d3bd5e19\Unity.Collections.Tests\System.Runtime.CompilerServices.Unsafe\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
       <Private>False</Private>
@@ -944,10 +948,6 @@
     </Reference>
     <Reference Include="System.ClientModel">
       <HintPath>Assets\Packages\System.ClientModel.1.9.0\lib\netstandard2.0\System.ClientModel.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Newtonsoft.Json.Bson">
-      <HintPath>Assets\Packages\Newtonsoft.Json.Bson.1.0.3\lib\netstandard2.0\Newtonsoft.Json.Bson.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="netstandard">

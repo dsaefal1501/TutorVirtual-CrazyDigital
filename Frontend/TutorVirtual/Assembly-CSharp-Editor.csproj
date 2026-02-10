@@ -762,6 +762,10 @@
       <HintPath>Assets\Packages\Microsoft.Bcl.AsyncInterfaces.10.0.2\lib\netstandard2.1\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Newtonsoft.Json.Bson">
+      <HintPath>Assets\Packages\Newtonsoft.Json.Bson.1.0.3\lib\netstandard2.0\Newtonsoft.Json.Bson.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="NugetForUnity">
       <HintPath>Assets\NuGet\Editor\NugetForUnity.dll</HintPath>
       <Private>False</Private>
