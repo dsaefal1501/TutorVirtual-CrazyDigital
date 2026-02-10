@@ -1,0 +1,23 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="main.uss" />
+
+    <ui:VisualElement name="Background" class="background">
+        
+        <ui:VisualElement name="CenterContainer" class="center-container">
+            
+            <ui:VisualElement class="header-row">
+                <ui:VisualElement class="header-line" />
+                <ui:Label text="Inicia sesión cómo:" class="header-text" />
+                <ui:VisualElement class="header-line" />
+            </ui:VisualElement>
+
+            <ui:Button text="Alumno" name="BtnAlumno" class="btn-role" />
+
+            <ui:Label text="ó" class="separator-text" />
+
+            <ui:Button text="Instructor" name="BtnInstructor" class="btn-role" />
+            
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>
