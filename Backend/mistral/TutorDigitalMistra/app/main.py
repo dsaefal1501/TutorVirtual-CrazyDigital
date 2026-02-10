@@ -72,6 +72,7 @@ def sync_knowledge(db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Error al sincronizar conocimiento: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-@app.post("test")
+@app.post("/test")
 def test():
     return {"mensaje": "Test exitoso"}
+
