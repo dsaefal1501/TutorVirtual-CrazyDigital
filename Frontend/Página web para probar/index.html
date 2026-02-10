@@ -30,12 +30,46 @@
                     <span class="status-dot"></span>
                     <span id="connectionStatus">Conectando...</span>
                 </div>
+                <button class="btn btn-sm btn-outline-light rounded-pill px-3" data-bs-toggle="modal"
+                    data-bs-target="#uploadModal">
+                    <i class="bi bi-file-earmark-pdf me-1"></i> Subir Temario
+                </button>
                 <button class="btn btn-sm btn-outline-light rounded-pill px-3" onclick="syncKnowledge()" id="syncBtn">
                     <i class="bi bi-arrow-repeat me-1"></i> Sincronizar
                 </button>
             </div>
         </div>
     </nav>
+
+    <!-- Upload Modal -->
+    <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadModalLabel">Subir Temario (PDF)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="uploadForm">
+                        <div class="mb-3">
+                            <label for="accountIdInput" class="form-label">Account ID</label>
+                            <input type="text" class="form-control" id="accountIdInput" required
+                                placeholder="UUID de la empresa">
+                        </div>
+                        <div class="mb-3">
+                            <label for="pdfFileInput" class="form-label">Archivo PDF</label>
+                            <input type="file" class="form-control" id="pdfFileInput" accept=".pdf" required>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary" id="uploadBtn">
+                                <i class="bi bi-cloud-upload me-2"></i>Subir y Procesar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content -->
     <main class="container py-5 mt-5">
@@ -76,6 +110,10 @@
                     <!-- Chat Footer (Input) -->
                     <div class="card-footer bg-white border-0 p-3">
                         <form id="chatForm" class="d-flex gap-2 align-items-end position-relative">
+                            <button type="button" class="btn btn-light btn-lg rounded-circle shadow-sm text-secondary"
+                                data-bs-toggle="modal" data-bs-target="#uploadModal" title="Subir Temario">
+                                <i class="bi bi-paperclip"></i>
+                            </button>
                             <div class="flex-grow-1 position-relative">
                                 <textarea class="form-control form-control-lg border-0 bg-light rounded-4 pe-5"
                                     id="userInput" rows="1" placeholder="Escribe tu pregunta aquí..."

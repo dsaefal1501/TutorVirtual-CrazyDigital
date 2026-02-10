@@ -45,6 +45,9 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         handleSubmit();
     });
+
+    // Upload Form Handler
+    document.getElementById('uploadForm').addEventListener('submit', handleUpload);
 });
 
 async function checkConnection() {
@@ -296,4 +299,85 @@ function showNotification(message, isError = false) {
         toastEl.classList.replace('bg-danger', 'bg-primary');
     }
     toast.show();
+}
+
+
+async function handleUpload(e) {
+    e.preventDefault();
+
+    const accountId = document.getElementById('accountIdInput').value.trim();
+    const fileInput = document.getElementById('pdfFileInput');
+    const file = fileInput.files[0];
+    const uploadBtn = document.getElementById('uploadBtn');
+    const originalBtnText = uploadBtn.innerHTML;
+
+    if (!file) {
+        showNotification('Por favor selecciona un archivo PDF', true);
+        return;
+    }
+
+    if (!accountId) {
+        showNotification('Por favor ingresa un Account ID', true);
+        return;
+    }
+
+    try {
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...';
+
+        const formData = new FormData();
+        formData.append('file', file);
+        // Nota: account_id se envía como query param según la definición del endpoint
+        const response = await fetch(`${API_URL}/upload/syllabus?account_id=${encodeURIComponent(accountId)}`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const responseText = await response.text();
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (jsonError) {
+            console.error("Respuesta no es JSON:", responseText);
+            throw new Error(response.ok ? 'Respuesta inesperada del servidor' : `Error ${response.status}: ${response.statusText}`);
+        }
+
+        if (!response.ok) {
+            let errorMsg = data.detail || data.message || `Error ${response.status}`;
+            if (typeof errorMsg === 'object') errorMsg = JSON.stringify(errorMsg);
+            throw new Error(errorMsg);
+        }
+
+        // Cerrar el modal de manera segura
+        const modalEl = document.getElementById('uploadModal');
+        let modal = bootstrap.Modal.getInstance(modalEl);
+        if (!modal) {
+            modal = new bootstrap.Modal(modalEl);
+        }
+        modal.hide();
+
+        // Limpiar backdrop si queda pegado
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style = '';
+
+        // Limpiar formulario logicamente
+        e.target.reset();
+
+        showNotification(data.message || 'Archivo procesado exitosamente');
+
+        // Opcional: Agregar mensaje del bot confirmando recepción
+        addMessage(`✅ **Archivo subido exitosamente**\n\n${data.message}`, 'bot');
+
+    } catch (error) {
+        showNotification(`Error: ${error.message}`, true);
+        console.error('Upload error:', error);
+        addMessage(`❌ **Error en la subida**\n\n${error.message}`, 'bot');
+    } finally {
+        if (uploadBtn) {
+            uploadBtn.disabled = false;
+            uploadBtn.innerHTML = originalBtnText;
+        }
+    }
 }

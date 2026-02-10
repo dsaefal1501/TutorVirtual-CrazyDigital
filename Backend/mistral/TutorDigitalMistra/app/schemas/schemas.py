@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 
+
+
 class PreguntaUsuario(BaseModel):
     usuario_id: int
     texto: str
@@ -21,3 +23,14 @@ class ConocimientoCreate(BaseModel):
     temario_id: int
     contenido: str
     metadatos: Dict[str, Any] = {}
+
+
+# Estructura recursiva para que la IA nos devuelva el árbol de temas
+class EstructuraTema(BaseModel):
+    title: str
+    description: str
+    subtopics: List['EstructuraTema'] = []
+
+class AnalisisArchivoResponse(BaseModel):
+    mensaje: str
+    modulos_creados: int
