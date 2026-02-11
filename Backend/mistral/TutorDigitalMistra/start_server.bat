@@ -1,35 +1,12 @@
 @echo off
-echo Activando entorno virtual...
-if exist env\Scripts\activate.bat (
-    call env\Scripts\activate.bat
-) else (
-    echo No se encontró el entorno virtual en env\Scripts\activate.bat. Continuando sin activar...
-)
-
+cd /d "%~dp0"
 echo Iniciando el servidor uvicorn (Tutor Digital)...
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+:: Intentar usar el entorno virtual si funciona, sino usar Python del sistema
+if exist env\Scripts\python.exe (
+    env\Scripts\python.exe run.py
+) else (
+    echo Entorno virtual no encontrado, usando Python del sistema...
+    python run.py
+)
 pause
-
-from fastapi import FastAPI, Response
-from fastapi.responses import StreamingResponse
-from elevenlabs.client import ElevenLabs
-
-app = FastAPI()
-client = ElevenLabs(api_key="sk_401a61fdf35cc545e1ab166b94c1de3ff4ba767d946d6ec2")
-
-@app.post("/ask/audio")
-async def ask_audio(request: dict):
-    texto_llm = request.get("texto_completo", "")
-    # Eliminamos el log inicial de 16 caracteres
-    clean_text = texto_llm[16:].strip() if len(texto_llm) > 16 else texto_llm
-
-    # El modelo 'turbo_v2.5' es el más rápido de ElevenLabs (latencia ultrabaja)
-    audio_stream = client.text_to_speech.convert_as_stream(
-        text=clean_text,
-        voice_id="ID_DE_VOZ_DE_PABLO",
-        model_id="eleven_turbo_v2_5", 
-        output_format="mp3_44100_128"
-    )
-
-    return StreamingResponse(audio_stream, media_type="audio/mpeg")
-
