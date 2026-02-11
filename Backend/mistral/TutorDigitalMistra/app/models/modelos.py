@@ -145,11 +145,21 @@ class MensajeChat(Base):
     texto: Mapped[str] = mapped_column(Text)
     embedding: Mapped[Optional[List[float]]] = mapped_column(Vector(1024))
     info_tecnica: Mapped[Optional[dict]] = mapped_column(JSON) # Tokens usados, modelo, etc.
-    fecha: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    fecha: Mapped[datetime] = mapped_column(DateTime, server_default=func.now()) # Fecha en la que se envio el mensaje
 
     sesion: Mapped["SesionChat"] = relationship(back_populates="mensajes")
 
+class EmbeddingCache(Base):
+    __tablename__ = "embedding_cache"
 
+    text_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    original_text: Mapped[str] = mapped_column(Text)
+    
+    # Ajusta 1024 al modelo de Mistral
+    embedding: Mapped[list] = mapped_column(Vector(1024))
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    
 # --- Módulo: Sistema (Logs y Config) ---
 
 class MetricaConsumo(Base):
@@ -171,7 +181,7 @@ class LogError(Base):
     origen: Mapped[str] = mapped_column(String(255))
     nivel: Mapped[str] = mapped_column(String(50)) # ERROR, WARNING, CRITICAL
     mensaje: Mapped[str] = mapped_column(Text)
-    fecha: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    fecha: Mapped[datetime] = mapped_column(DateTime, server_default=func.now()) # Fecha cuando ocurrio el error
 
 class Configuracion(Base):
     __tablename__ = "configuracion"
@@ -179,3 +189,7 @@ class Configuracion(Base):
     clave: Mapped[str] = mapped_column(String(100), primary_key=True)
     valor: Mapped[str] = mapped_column(String(255))
     descripcion: Mapped[Optional[str]] = mapped_column(String(255))
+
+
+
+    

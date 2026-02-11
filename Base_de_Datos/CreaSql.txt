@@ -105,3 +105,17 @@ CREATE TABLE Logs_Errores (
     mensaje TEXT,
     fecha TIMESTAMP DEFAULT NOW()
 );
+CREATE TABLE embedding_cache (
+    -- El Hash SHA256 del texto original (actúa como ID único y rápido)
+    text_hash VARCHAR(64) PRIMARY KEY,
+
+    -- El texto original (útil para depurar o si necesitas reconstruirlo)
+    original_text TEXT NOT NULL,
+
+    -- El vector numérico. Importante: ajusta 1024 al modelo que uses
+    embedding VECTOR(1024) NOT NULL,
+
+    -- Fecha de creación para saber cuándo se guardó (útil para limpiar caché vieja)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_embedding_hash ON embedding_cache (text_hash);

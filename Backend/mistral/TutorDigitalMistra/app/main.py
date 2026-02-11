@@ -19,10 +19,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configuración de CORS (Permitir que el frontend hable con el backend)
+# Configuración de CORS (Permitir que el frontend hable con el backend), actualmente cualquier fronted puede hablar con esta api en 
+# un futuro se restringe a nuestra app
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, cambia "*" por la URL de tu frontend
+    allow_origins=["*"],  # En producción, se cambia "*" por la url de nuestra app
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,7 +44,7 @@ def ask_tutor(pregunta: PreguntaUsuario, db: Session = Depends(get_db)):
     try:
         if not pregunta.texto:
             raise HTTPException(status_code=400, detail="La pregunta no puede estar vacía")
-            
+                
         respuesta = rag_service.preguntar_al_tutor(db, pregunta)
         return respuesta
     except Exception as e:
@@ -54,7 +55,7 @@ def ask_tutor(pregunta: PreguntaUsuario, db: Session = Depends(get_db)):
 @app.post("/ask/stream")
 def ask_tutor_stream(pregunta: PreguntaUsuario, db: Session = Depends(get_db)):
     """
-    Endpoint de Streaming. Devuelve texto poco a poco.
+    Endpoint de Streaming. Devuelve texto poco a poco, asi se puede ver la respuesta mientras se genera.
     """
     return StreamingResponse(
         rag_service.preguntar_al_tutor_stream(db, pregunta),
