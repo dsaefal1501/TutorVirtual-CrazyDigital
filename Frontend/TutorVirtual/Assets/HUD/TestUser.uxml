@@ -1,23 +1,21 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="main.uss" />
-
-    <ui:VisualElement name="Background" class="background">
-        
-        <ui:VisualElement name="CenterContainer" class="center-container">
+    
+    <ui:VisualElement name="Container" class="main-container">
+        <ui:VisualElement name="LoginCard" class="card">
             
-            <ui:VisualElement class="header-row">
-                <ui:VisualElement class="header-line" />
-                <ui:Label text="Inicia sesión cómo:" class="header-text" />
-                <ui:VisualElement class="header-line" />
+            <ui:Label text="Iniciar Sesión" class="header-title" />
+            
+            <ui:TextField name="InputUsername" label="Usuario" placeholder-text="Ingresa tu usuario" class="input-field" />
+            <ui:TextField name="InputPassword" label="Contraseña" password="true" class="input-field" />
+            
+            <ui:Button text="ENTRAR" name="BtnLogin" class="btn-primary" />
+            
+            <ui:VisualElement class="footer-row">
+                <ui:Button text="Crear cuenta" name="BtnRegister" class="btn-link" />
+                <ui:Button text="Recuperar contraseña" name="BtnForgot" class="btn-link" />
             </ui:VisualElement>
 
-            <ui:Button text="Alumno" name="BtnAlumno" class="btn-role" />
-
-            <ui:Label text="ó" class="separator-text" />
-
-            <ui:Button text="Instructor" name="BtnInstructor" class="btn-role" />
-            
         </ui:VisualElement>
-
     </ui:VisualElement>
 </ui:UXML>

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>CrazyTeacher | Aula Virtual</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <link rel="stylesheet" href="styles.css"> 
+    
+    <style>
+        /* --- ESTILOS COMPARTIDOS (CrazyTeacher Theme) --- */
+        :root {
+            --primary: #6fa0e0;
+            --primary-dark: #5a8ac6;
+            --bg-start: #eef7ff;
+            --bg-end: #9bc5ff;
+            --text-main: #475569;
+            --text-light: #94a3b8;
+            --glass-bg: rgba(255, 255, 255, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.8);
+            --shadow-card: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            --shadow-input: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+        }
+
+        body, html { 
+            width: 100%; height: 100%; margin: 0; padding: 0; 
+            overflow: hidden; 
+            background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-end) 100%);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-main);
+        }
+        
+        /* --- UNITY --- */
+        #unity-container { 
+            position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; 
+            pointer-events: none; 
+        }
+        #unity-canvas { display: block; width: 100% !important; height: 100% !important; }
+
+        /* --- PANTALLA DE CARGA (Con estilo del Login) --- */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-end) 100%);
+            z-index: 9999;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            transition: opacity 1.5s ease-in-out, visibility 1.5s;
+        }
+        .fade-out { opacity: 0; visibility: hidden; pointer-events: none; }
+
+        /* Animación de fondo (Burbujas) */
+        .ambient-shape {
+            position: absolute; filter: blur(90px); z-index: -1; opacity: 0.6;
+            animation: float 10s infinite ease-in-out;
+        }
+        .shape-1 {
+            top: -15%; left: -10%; width: 600px; height: 600px;
+            background: #cbdcf5; border-radius: 50%;
+        }
+        .shape-2 {
+            bottom: -15%; right: -5%; width: 500px; height: 500px;
+            background: #a3c9ff; border-radius: 50%; animation-delay: -5s;
+        }
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(30px, 40px); }
+        }
+        
+        /* Spinner personalizado */
+        .spinner-custom {
+            width: 60px; height: 60px; 
+            border: 6px solid rgba(255, 255, 255, 0.4); 
+            border-top: 6px solid var(--primary); 
+            border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 25px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* --- CHAT UI (Glassmorphism) --- */
+        #overlay-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1000; pointer-events: none; }
+        #chatbot-toggle-btn, #chat-widget { pointer-events: auto !important; }
+
+        /* Botón Flotante */
+        #chatbot-toggle-btn {
+            position: fixed; bottom: 30px; right: 30px;
+            width: 65px; height: 65px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(to bottom, #7fabda, var(--primary));
+            color: white;
+            box-shadow: 0 4px 15px rgba(50, 50, 93, 0.3);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex; align-items: center; justify-content: center;
+        }
+        #chatbot-toggle-btn:hover { 
+            transform: scale(1.1) rotate(-10deg); 
+            box-shadow: 0 8px 25px rgba(50, 50, 93, 0.4);
+        }
+
+        /* Widget del Chat */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: var(--shadow-card);
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            /* Posición */
+            position: fixed; bottom: 110px; right: 30px; width: 350px; height: 500px;
+            max-height: 80vh;
+        }
+
+        .chat-header {
+            background: rgba(255, 255, 255, 0.4);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+            padding: 15px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .chat-body {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex; flex-direction: column; gap: 12px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(111, 160, 224, 0.5) transparent;
+        }
+
+        /* Mensajes */
+        .message { display: flex; gap: 10px; align-items: flex-end; max-width: 85%; }
+        .message.bot { align-self: flex-start; }
+        .message.user { align-self: flex-end; flex-direction: row-reverse; }
+        
+        .message-content { 
+            padding: 12px 16px; 
+            border-radius: 20px; 
+            font-size: 0.95rem; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            line-height: 1.4;
+        }
+        
+        .message.bot .message-content {
+            background: white;
+            color: var(--text-main);
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message.user .message-content {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .avatar { 
+            width: 32px; height: 32px; border-radius: 50%; 
+            display: flex; align-items: center; justify-content: center; 
+            background: white; color: var(--primary);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            font-size: 1.1rem;
+        }
+
+        /* Footer / Input Area */
+        .chat-footer {
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.3);
+            border-top: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        
+        .input-pill {
+            border-radius: 50px;
+            border: 1px solid transparent;
+            background: white;
+            box-shadow: var(--shadow-input);
+            padding: 10px 20px;
+            font-size: 0.95rem;
+            width: 100%;
+            resize: none;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .input-pill:focus {
+            box-shadow: 0 0 0 3px rgba(111, 160, 224, 0.2);
+        }
+
+        .btn-send {
+            width: 45px; height: 45px;
+            border-radius: 50%;
+            border: none;
+            background: var(--primary);
+            color: white;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 10px rgba(111, 160, 224, 0.4);
+            transition: transform 0.2s;
+        }
+        .btn-send:hover:not(:disabled) { transform: scale(1.1); background: var(--primary-dark); }
+        .btn-send:disabled { background: #cbd5e1; transform: none; box-shadow: none; }
+
+        /* Status Dot */
+        .status-badge {
+            font-size: 0.75rem;
+            background: rgba(255, 255, 255, 0.6);
+            padding: 4px 10px;
+            border-radius: 20px;
+            color: var(--primary);
+            font-weight: 600;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .status-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; display: inline-block; }
+        .status-dot.connecting { background: #eab308; }
+
+    </style>
+</head>
+
+<body>
+    <div id="loading-overlay">
+        <div class="ambient-shape shape-1"></div>
+        <div class="ambient-shape shape-2"></div>
+        
+        <div class="spinner-custom"></div>
+        <div style="color: #475569; font-weight: 600; font-size: 1.1rem; z-index: 10;">Preparando el aula...</div>
+        <div style="color: #94a3b8; font-size: 0.9rem; margin-top: 5px; z-index: 10;">CrazyTeacher v1.0</div>
+    </div>
+
+    <div id="unity-container">
+        <canvas id="unity-canvas" tabindex="-1"></canvas>
+    </div>
+
+    <div id="overlay-container">
+        
+        <button id="chatbot-toggle-btn" onclick="toggleChat()">
+            <i class="bi bi-chat-dots-fill fs-4"></i>
+        </button>
+
+        <div id="chat-widget" class="glass-card" style="display: none;">
+            
+            <div class="chat-header">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="avatar" style="width: 35px; height: 35px;">👓</div>
+                    <div>
+                        <div class="fw-bold text-dark" style="font-size: 1rem;">Tutor IA</div>
+                        <div style="font-size: 0.75rem; color: var(--text-light);">Siempre atento</div>
+                    </div>
+                </div>
+                
+                <div class="d-flex align-items-center gap-2">
+                    <div class="status-badge">
+                        <span id="statusDot" class="status-dot connecting"></span>
+                        <span id="connectionStatus">Conectando</span>
+                    </div>
+                    <button class="btn btn-sm text-secondary p-0 ms-1" onclick="toggleChat()">
+                        <i class="bi bi-x-lg fs-6"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="chat-body" id="chatContainer">
+                <div class="message bot">
+                    <div class="avatar"><i class="bi bi-robot"></i></div>
+                    <div class="message-content">
+                        <p class="mb-0">¡Hola! Soy tu Tutor Digital. ¿En qué lío te has metido hoy?</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-footer">
+                <form id="chatForm" class="d-flex gap-2 align-items-end">
+                    <div class="flex-grow-1">
+                        <textarea class="input-pill" id="userInput" rows="1" placeholder="Escribe tu duda aquí..." ></textarea>
+                    </div>
+                    <button type="submit" class="btn-send" id="sendBtn" disabled>
+                        <i class="bi bi-send-fill"></i>
+                    </button>
+                </form>
+                
+                <div class="d-flex justify-content-between align-items-center mt-2 px-2">
+                    <div class="form-check form-switch" style="transform: scale(0.9); transform-origin: left;">
+                        <input class="form-check-input" type="checkbox" id="streamToggle" checked>
+                        <label class="form-check-label small text-muted" for="streamToggle">Respuesta rápida (Stream)</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <script>
+      // 1. CARGA DE UNITY
+      var canvas = document.querySelector("#unity-canvas");
+      
+      var buildUrl = "BuildVanilla/Build";
+      var loaderUrl = buildUrl + "/BuildVanilla.loader.js";
+      
+      var config = {
+        dataUrl: buildUrl + "/BuildVanilla.data.unityweb",
+        frameworkUrl: buildUrl + "/BuildVanilla.framework.js.unityweb",
+        codeUrl: buildUrl + "/BuildVanilla.wasm.unityweb",
+        streamingAssetsUrl: "BuildVanilla/StreamingAssets",
+        companyName: "DefaultCompany",
+        productName: "TutorVirtual",
+        productVersion: "0.1.0",
+      };
+
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = () => {
+        createUnityInstance(canvas, config).then((unityInstance) => {
+          window.unityInstance = unityInstance; 
+          
+          // CUANDO UNITY ESTÁ LISTO: Desaparecemos la pantalla de carga
+          const loader = document.getElementById('loading-overlay');
+          if(loader) {
+              loader.classList.add('fade-out');
+              setTimeout(() => { loader.remove(); }, 1500);
+          }
+          
+          // Actualizar estado visual a conectado
+          document.getElementById('connectionStatus').innerText = "En línea";
+          document.getElementById('statusDot').classList.remove('connecting');
+
+        }).catch((message) => { alert(message); });
+      };
+      document.body.appendChild(script);
+
+      // Bloquear teclas para Unity en el input
+      const inputRef = document.getElementById('userInput');
+      if (inputRef) {
+          const stopProp = (e) => { e.stopPropagation(); };
+          inputRef.addEventListener('keydown', stopProp);
+          inputRef.addEventListener('keypress', stopProp);
+          inputRef.addEventListener('keyup', stopProp);
+          
+          // Auto-resize del textarea
+          inputRef.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+            if(this.value === '') this.style.height = 'auto';
+          });
+      }
+
+      // Lógica de UI simple para el chat (Toggle)
+      function toggleChat() {
+          const widget = document.getElementById('chat-widget');
+          const btn = document.getElementById('chatbot-toggle-btn');
+          
+          if (widget.style.display === 'none' || widget.style.display === '') {
+              widget.style.display = 'flex';
+              // Pequeña animación de entrada
+              widget.style.opacity = '0';
+              widget.style.transform = 'translateY(20px)';
+              setTimeout(() => {
+                  widget.style.transition = 'all 0.3s ease';
+                  widget.style.opacity = '1';
+                  widget.style.transform = 'translateY(0)';
+              }, 10);
+              btn.style.display = 'none';
+          } else {
+              widget.style.opacity = '0';
+              widget.style.transform = 'translateY(20px)';
+              setTimeout(() => {
+                  widget.style.display = 'none';
+                  btn.style.display = 'flex';
+              }, 300);
+          }
+      }
+    </script>
+
+    <script src="script.js"></script>
+</body>
+</html>

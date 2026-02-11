@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:8000';
+const API_URL = 'http://192.168.18.6:8000';
 
 // DOM Elements
 const chatForm = document.getElementById('chatForm');
@@ -102,7 +102,7 @@ async function handleSubmit() {
             },
             body: JSON.stringify({
                 texto: text,
-                usuario_id: 1  // ID temporal para pruebas
+                usuario_id: 2  // ID temporal para pruebas
             })
         });
 
