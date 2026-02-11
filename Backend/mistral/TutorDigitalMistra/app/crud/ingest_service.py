@@ -1,5 +1,6 @@
 import json
-from pydantic import TypeAdapter
+import concurrent.futures
+from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from fastapi import UploadFile
 from pypdf import PdfReader
@@ -7,162 +8,209 @@ from io import BytesIO
 from mistralai import Mistral
 import os
 
-# Importamos tus modelos (usando la versión actual de modelos.py)
+# Importamos modelos y el servicio de RAG
 from app.models.modelos import Temario, BaseConocimiento
 from app.crud import rag_service
 
 api_key = os.getenv("MISTRAL_API_KEY")
 client = Mistral(api_key=api_key) if api_key else None
 
-def extraer_texto_pdf(file: UploadFile) -> str:
-    """Lee el archivo PDF en memoria y saca el texto plano."""
+# ============================================================================
+# 1. UTILIDADES DE EXTRACCIÓN (Sin cambios)
+# ============================================================================
+
+def extraer_info_paginada(file: UploadFile) -> List[Dict[str, Any]]:
     content = file.file.read()
     reader = PdfReader(BytesIO(content))
-    texto_completo = ""
-    for page in reader.pages:
-        texto_completo += page.extract_text() + "\n"
-    return texto_completo[:30000] # OJO: Limitamos caracteres para no romper el contexto de la IA
-
-def analizar_estructura_con_ia(texto: str) -> list[dict]:
-    """Usa Mistral para convertir texto plano en JSON jerárquico."""
-    if not client: raise Exception("No hay API Key de Mistral")
-
-    prompt_arquitecto = """
-    ERES UN ARQUITECTO DE DATOS. Analiza el siguiente texto educativo.
-    Devuelve ÚNICAMENTE un JSON válido con la siguiente estructura exacta:
-    {
-        "temas": [
-            {"nombre": "...", "descripcion": "...", "nivel": ..., "orden": ...},
-            ...
-        ]
-    }
+    paginas = []
+    basura = ["Python para todos", "Raúl González Duque", "--- PAGE"]
     
-    donde nivel es el nivel de jerarquía y orden es el orden en el que se encuentra.
-    Interpretación de Metadatos:
-    Cada fragmento de información tiene un parent_id (el tema contenedor) y un orden (su posición relativa).
-    En la jerarquía cada nivel se asigna a un tipo de información,
-    nivel 1 es el tema 1
-    nivel 2 es un punto 1.1 
-    nivel 3 es un subpunto 1.1.1
+    for i, page in enumerate(reader.pages):
+        texto = page.extract_text()
+        if texto:
+            lines = [l for l in texto.split('\n') if not any(b in l for b in basura)]
+            paginas.append({
+                "numero": i + 1,
+                "text": "\n".join(lines)
+            })
+    return paginas
 
-    Ejemplo: Tema 1 es el nivel 1 “el nivel mas alto”, y el orden 1 y el siguiente tema es el nivel 1 y el orden 2.
-    Si el siguiente tema es el punto 1.1 es el nivel 2 y el orden 1.
-    Si el siguiente tema es el subpunto 1.1.1 es el nivel 3 y el orden 1.
-    Si el siguiente tema es el punto 1.2 es el nivel 2 y el orden 2.
-    Si el siguiente tema es el subpunto 1.2.1 es el nivel 3 y el orden 1.
+def obtener_texto_rango(paginas: List[Dict], inicio: int, fin: int) -> str:
+    texto_acumulado = ""
+    # Ajuste para capturar correctamente el rango
+    for p in paginas:
+        if inicio <= p["numero"] < fin: 
+            texto_acumulado += p["text"] + "\n\n"
+    if inicio == fin: # Caso borde: tema de una sola página
+         for p in paginas:
+            if p["numero"] == inicio:
+                texto_acumulado += p["text"]
+    return texto_acumulado
 
+# ============================================================================
+# 2. FASE 1: ARQUITECTO (Estructura) - Se mantiene secuencial (es rápido)
+# ============================================================================
 
-    Detecta la jerarquía por los títulos. Resume el contenido en 'descripcion'.
+def generar_estructura_temario(texto_indice: str) -> List[Dict]:
+    if not client: return []
+    prompt = """
+    ERES UN EDITOR. Extrae la estructura del libro en JSON.
+    REGLAS: 'nombre', 'nivel' (1, 2), 'pagina_inicio'.
+    FORMATO JSON: {"temas": [{"nombre": "...", "nivel": 1, "orden": 1, "pagina_inicio": 7}, ...]}
     """
-
-    chat_response = client.chat.complete(
-        model="mistral-large-latest", # Usar modelo inteligente para esto
-        messages=[
-            {"role": "system", "content": prompt_arquitecto},
-            {"role": "user", "content": f"TEXTO A ANALIZAR:\n{texto}"}
-        ],
-        response_format={"type": "json_object"} # Forzar JSON mode (Vital)
-    )
-    
-    # Parsear respuesta
-    raw_json = chat_response.choices[0].message.content
-    print(f"DEBUG - Raw JSON from AI: {raw_json}") # Para depuración
-    
     try:
-        data = json.loads(raw_json)
-        
-        # 1. Caso ideal: Tiene la clave "temas"
-        if isinstance(data, dict) and "temas" in data and isinstance(data["temas"], list):
-            return data["temas"]
-            
-        # 2. Caso legacy: Tiene la clave "topics"
-        if isinstance(data, dict) and "topics" in data and isinstance(data["topics"], list):
-            return data["topics"]
-            
-        # 3. Caso directo: Es una lista
-        if isinstance(data, list):
-            return data
-            
-        # 4. Fallback: Buscar cualquier valor que sea una lista en el diccionario
-        if isinstance(data, dict):
-            for key, value in data.items():
-                if isinstance(value, list):
-                    return value
-                    
-        # Si llegamos aquí, no se encontró una lista válida
-        print("Error: El JSON no contiene una lista de temas válida.")
-        return []
-    except Exception as e:
-        print(f"Error parseando JSON: {e}")
-        return []
+        response = client.chat.complete(
+            model="mistral-large-latest",
+            messages=[{"role": "system", "content": prompt}, {"role": "user", "content": texto_indice}],
+            response_format={"type": "json_object"}
+        )
+        return json.loads(response.choices[0].message.content).get("temas", [])
+    except: return []
 
-def _insertar_tema(db: Session, nodo: dict, account_id: str, parent_id=None):
+def _guardar_temario_recursivo(db: Session, temas: List[Dict]) -> List[Dict]:
+    lista_plana = []
+    padres = {} 
+    
+    for t in temas:
+        nivel = t.get("nivel", 1)
+        parent_id = padres.get(nivel - 1) if nivel > 1 else None
+        
+        nuevo_tema = Temario(
+            nombre=t["nombre"], nivel=nivel, orden=t.get("orden", 0),
+            parent_id=parent_id, pagina_inicio=t.get("pagina_inicio", 0),
+            descripcion="Tema importado"
+        )
+        db.add(nuevo_tema)
+        db.commit()
+        db.refresh(nuevo_tema)
+        padres[nivel] = nuevo_tema.id
+        
+        t_con_id = t.copy()
+        t_con_id["db_id"] = nuevo_tema.id
+        lista_plana.append(t_con_id)
+        
+    return lista_plana
+
+# ============================================================================
+# 3. FASE 2: ATOMIZADOR PARALELO (Aquí está la magia de la velocidad)
+# ============================================================================
+
+def procesar_texto_con_ia(tema_id: int, texto: str, pag_inicio: int) -> Dict:
     """
-    Función para guardar un tema individual.
-    Recibe el nodo con la estructura plana: {"id": "...", "parent_id": "...", "nombre": "...", "descripcion": "...", "nivel": ..., "orden": ...}
+    Esta función NO toca la base de datos. Solo habla con la IA.
+    Esto permite ejecutarla en hilos paralelos sin corromper SQLAlchemy.
     """
-    # 1. Crear el Temario (La estructura/índice)
-    # Nota: account_id se ignora porque el modelo actual no lo soporta directamente
-    nuevo_modulo = Temario(
-        parent_id=parent_id,
-        nombre=nodo.get('nombre', 'Sin título'),
-        descripcion=nodo.get('descripcion', ''),
-        nivel=nodo.get('nivel', 1),
-        orden=nodo.get('orden', 1)
-    )
-    db.add(nuevo_modulo)
-    db.commit()
-    db.refresh(nuevo_modulo)
+    if not texto or len(texto) < 10: 
+        return {"tema_id": tema_id, "bloques": [], "error": "Texto vacío"}
 
-    # 2. Guardamos la descripción en el Temario.
-    # La generación de embeddings y la inserción en BaseConocimiento
-    # se realizarán en bloque mediante
-    # rag_service.sincronizar_temario_a_conocimiento(db)
-    descripcion = nodo.get('descripcion', '')
-    if descripcion:
-        texto_vectorizar = f"Tema: {nuevo_modulo.nombre}. Nivel: {nuevo_modulo.nivel}. Contenido: {descripcion}"
-    
-    # Commit final del bloque
-    db.commit()
-    return nuevo_modulo.id
-
-def procesar_archivo_temario(db: Session, file: UploadFile, account_id: str):
-    # 1. Extraer
-    texto = extraer_texto_pdf(file)
-    
-    # 2. Estructurar (IA)
-    estructura_json = analizar_estructura_con_ia(texto)
-    
-    # 3. Guardar en DB (Iterativo con rastreo de padres por nivel)
-    # Estructura esperada: [{"nombre": "...", "descripcion": "...", "nivel": 1, "orden": 1}, ...]
-    
-    count = 0
-    last_ids = {} # Diccionario para guardar el ID del último tema de cada nivel: {1: id_tema1, 2: id_tema1_1, ...}
-
-    for nodo in estructura_json:
-        nivel = nodo.get('nivel', 1)
-        
-        # Determinar el parent_id
-        parent_id = None
-        if nivel > 1:
-            # El padre es el último tema visto del nivel inmediatamente superior
-            parent_id = last_ids.get(nivel - 1)
-        
-        # Insertar el tema
-        nuevo_id = _insertar_tema(db, nodo, account_id, parent_id=parent_id)
-        
-        # Actualizar el rastreo de IDs
-        last_ids[nivel] = nuevo_id
-        
-        count += 1
-        
-    # Después de crear todos los registros de Temario, generamos los
-    # embeddings y los guardamos en BaseConocimiento usando la función
-    # centralizada de `rag_service` para evitar duplicación de lógica
+    prompt = """
+    DIVIDE EL TEXTO EN BLOQUES SECUENCIALES.
+    1. NO RESUMAS. Usa texto literal.
+    2. 'tipo': 'texto' o 'codigo'.
+    JSON: {"bloques": [{"tipo": "texto", "contenido": "..."}]}
+    """
     try:
-        nuevos_kb = rag_service.sincronizar_temario_a_conocimiento(db)
-        print(f"Sincronización completada: {nuevos_kb} nuevos registros en BaseConocimiento")
+        # Nota: Si Mistral da error 429 (Rate Limit), el retry del cliente lo manejará
+        # o habrá que reducir max_workers en el ThreadPool.
+        resp = client.chat.complete(
+            model="mistral-large-latest",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": f"TEXTO:\n{texto[:12000]}"} # Recorte preventivo
+            ],
+            response_format={"type": "json_object"}
+        )
+        bloques = json.loads(resp.choices[0].message.content).get("bloques", [])
+        return {"tema_id": tema_id, "pag_inicio": pag_inicio, "bloques": bloques, "error": None}
     except Exception as e:
-        print(f"Error al sincronizar temario a conocimiento: {e}")
+        return {"tema_id": tema_id, "error": str(e)}
 
-    return count
+def procesar_archivo_temario(db: Session, file: UploadFile, account_id: str = None):
+    print("--- INICIO PROCESO DE ALTA VELOCIDAD ---")
+    
+    # 1. Leer PDF
+    paginas_pdf = extraer_info_paginada(file)
+    
+    # 2. Estructura (Índice)
+    texto_indice = obtener_texto_rango(paginas_pdf, 1, 15)
+    estructura = generar_estructura_temario(texto_indice)
+    if not estructura: return {"error": "Fallo al leer índice"}
+    
+    # 3. Guardar esqueleto en BD (Esto es rápido)
+    temas_db = _guardar_temario_recursivo(db, estructura)
+    temas_db.sort(key=lambda x: x.get("pagina_inicio", 0))
+    
+    # 4. PREPARAR TAREAS PARALELAS
+    # En lugar de procesar, preparamos los datos necesarios para cada hilo
+    tareas_ia = []
+    
+    for i, tema in enumerate(temas_db):
+        p_inicio = tema.get("pagina_inicio", 1)
+        if i < len(temas_db) - 1:
+            p_fin = temas_db[i+1].get("pagina_inicio", p_inicio)
+        else:
+            p_fin = len(paginas_pdf) + 1
+        
+        if p_fin <= p_inicio: p_fin = p_inicio + 1
+        
+        texto_capitulo = obtener_texto_rango(paginas_pdf, p_inicio, p_fin)
+        
+        # Guardamos los argumentos para la función paralela
+        tareas_ia.append({
+            "tema_id": tema["db_id"],
+            "texto": texto_capitulo,
+            "pag_inicio": p_inicio
+        })
+
+    print(f" -> Lanzando {len(tareas_ia)} tareas en paralelo...")
+
+    # 5. EJECUCIÓN PARALELA (ThreadPool)
+    # Ajusta max_workers según tu plan de API (3-5 suele ser seguro, 10 es muy rápido pero arriesgado)
+    resultados_procesados = []
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        # Mapeamos la función a los argumentos
+        futures = {executor.submit(procesar_texto_con_ia, t["tema_id"], t["texto"], t["pag_inicio"]): t for t in tareas_ia}
+        
+        for future in concurrent.futures.as_completed(futures):
+            resultado = future.result()
+            if not resultado.get("error"):
+                resultados_procesados.append(resultado)
+                print(f"   [OK] Tema ID {resultado['tema_id']} procesado.")
+            else:
+                print(f"   [ERROR] Tema ID {resultado['tema_id']}: {resultado['error']}")
+
+    # 6. GUARDADO EN BD (SECUENCIAL Y SEGURO)
+    # Ahora que tenemos todos los datos, los guardamos en la BD en el hilo principal
+    print(" -> Guardando bloques en base de datos...")
+    total_bloques = 0
+    
+    for item in resultados_procesados:
+        tema_id = item["tema_id"]
+        pag_base = item["pag_inicio"]
+        
+        for idx, b in enumerate(item["bloques"]):
+            tipo = b.get("tipo", "texto")
+            contenido = b.get("contenido", "")
+            
+            # Generamos embedding (puede tardar un poco, pero ya ahorramos mucho tiempo antes)
+            # Opcional: Podrías paralelizar esto también, pero cuidado con rate limits de embeddings
+            vector = rag_service.generar_embedding(db, f"{tipo.upper()}: {contenido}")
+            
+            nuevo_bloque = BaseConocimiento(
+                temario_id=tema_id,
+                contenido=contenido,
+                tipo_contenido=tipo,
+                orden_aparicion=idx + 1,
+                pagina=pag_base,
+                ref_fuente=f"Libro Pag {pag_base}",
+                embedding=vector,
+                metadata_info={"origen": "ingesta_paralela"}
+            )
+            db.add(nuevo_bloque)
+            total_bloques += 1
+            
+    db.commit()
+    print("--- FIN PROCESO ---")
+    
+    return {"mensaje": "Procesamiento paralelo completado", "bloques": total_bloques}

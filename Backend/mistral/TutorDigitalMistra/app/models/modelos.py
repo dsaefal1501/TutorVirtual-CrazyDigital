@@ -56,28 +56,40 @@ class Temario(Base):
     nivel: Mapped[int] = mapped_column(Integer)
     orden: Mapped[int] = mapped_column(Integer)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
-
-    # Relación recursiva (Un tema tiene subtemas)
-    subtemas: Mapped[List["Temario"]] = relationship("Temario", backref=backref("parent", remote_side=[id]))
     
-    # Otras relaciones
+    # --- NUEVO CAMPO ---
+    pagina_inicio: Mapped[Optional[int]] = mapped_column(Integer, nullable=True) 
+
+    # Relaciones existentes
+    subtemas: Mapped[List["Temario"]] = relationship("Temario", backref=backref("parent", remote_side=[id]))
     base_conocimiento: Mapped[List["BaseConocimiento"]] = relationship(back_populates="temario")
     preguntas_comunes: Mapped[List["PreguntaComun"]] = relationship(back_populates="temario")
     tests: Mapped[List["Test"]] = relationship(back_populates="temario")
     sesiones: Mapped[List["SesionChat"]] = relationship(back_populates="temario")
-
+    # Nueva relación con progreso
+    progreso: Mapped[List["ProgresoAlumno"]] = relationship(back_populates="temario")
 
 class BaseConocimiento(Base):
     __tablename__ = "base_conocimiento"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     temario_id: Mapped[int] = mapped_column(ForeignKey("temario.id"))
-    contenido: Mapped[str] = mapped_column(Text) # El texto original (chunk)
-    # Vector de 1024 dimensiones (para Mistral)
+    contenido: Mapped[str] = mapped_column(Text) # El texto original
+    
+    # --- NUEVOS CAMPOS PARA ENSEÑANZA SECUENCIAL ---
+    tipo_contenido: Mapped[str] = mapped_column(String(50), default='texto') # 'texto', 'codigo', etc.
+    orden_aparicion: Mapped[int] = mapped_column(Integer, default=0)
+    ref_fuente: Mapped[Optional[str]] = mapped_column(String(100))
+    pagina: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Vector RAG (existente)
     embedding: Mapped[Optional[List[float]]] = mapped_column(Vector(1024)) 
-    metadata_info: Mapped[dict] = mapped_column(JSON, name="metadatos") # Renombrado para evitar conflicto con palabra reservada
+    metadata_info: Mapped[dict] = mapped_column(JSON, name="metadatos")
 
     temario: Mapped["Temario"] = relationship(back_populates="base_conocimiento")
+    # Relación inversa para saber si este contenido es el último visto por alguien
+    progreso_vinculado: Mapped[List["ProgresoAlumno"]] = relationship(back_populates="ultimo_contenido_visto")
+    ejercicio: Mapped["EjercicioCodigo"] = relationship(back_populates="contenido_base", uselist=False)
 
 
 class PreguntaComun(Base):
@@ -192,4 +204,40 @@ class Configuracion(Base):
 
 
 
+    # --- Módulo: Progreso Académico ---
+
+class ProgresoAlumno(Base):
+    __tablename__ = "progreso_alumno"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
+    temario_id: Mapped[int] = mapped_column(ForeignKey("temario.id"))
     
+    # Referencia al ID específico de la tabla base_conocimiento (el párrafo exacto)
+    ultimo_contenido_visto_id: Mapped[Optional[int]] = mapped_column(ForeignKey("base_conocimiento.id"), nullable=True)
+    
+    estado: Mapped[str] = mapped_column(String(20), default='en_progreso') # 'en_progreso', 'completado'
+    fecha_actualizacion: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # Relaciones para navegar desde el objeto
+    usuario: Mapped["Usuario"] = relationship(backref="progresos")
+    temario: Mapped["Temario"] = relationship()
+    
+    # Esta relación permite acceder al texto/código del último punto visto:
+    # Ej: progreso.ultimo_contenido_visto.contenido -> "El código print() sirve para..."
+    ultimo_contenido_visto: Mapped["BaseConocimiento"] = relationship()
+
+    # ... (Clase ProgresoAlumno y otras clases) ...
+
+class EjercicioCodigo(Base):
+    __tablename__ = "ejercicios_codigo"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    base_conocimiento_id: Mapped[int] = mapped_column(ForeignKey("base_conocimiento.id"))
+    
+    solucion_esperada: Mapped[str] = mapped_column(Text)
+    pistas: Mapped[Optional[str]] = mapped_column(Text)
+    dificultad: Mapped[int] = mapped_column(Integer, default=1)
+
+    # Aquí NO hay error porque BaseConocimiento ya existe (estaba arriba)
+    contenido_base: Mapped["BaseConocimiento"] = relationship("BaseConocimiento", back_populates="ejercicio")

@@ -34,3 +34,4 @@ class EstructuraTema(BaseModel):
 class AnalisisArchivoResponse(BaseModel):
     mensaje: str
     modulos_creados: int
+
