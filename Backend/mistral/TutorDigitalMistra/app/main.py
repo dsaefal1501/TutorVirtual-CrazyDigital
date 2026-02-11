@@ -6,6 +6,8 @@ from app.db.database import get_db, engine
 from app.models import modelos
 from app.schemas.schemas import PreguntaUsuario, RespuestaTutor, ConocimientoCreate
 from app.crud import rag_service
+from app.crud import ingest_service
+from fastapi import UploadFile, File, Form
 
 # Crear las tablas automáticamente (solo para desarrollo)
 # En producción, usa Alembic para migraciones.
@@ -62,7 +64,7 @@ def ask_tutor_stream(pregunta: PreguntaUsuario, db: Session = Depends(get_db)):
 @app.post("/knowledge/sync")
 def sync_knowledge(db: Session = Depends(get_db)):
     """
-    Sincroniza AUTOMÁCICAMENTE el contenido de la tabla 'Temario' a la 'BaseConocimiento'.
+    Sincroniza AUTOMÁTICAMENTE el contenido de la tabla 'Temario' a la 'BaseConocimiento'.
     Genera embeddings para todos los temas que tengan descripción y no estén ya procesados.
     No requiere parámetros.
     """
@@ -76,3 +78,26 @@ def sync_knowledge(db: Session = Depends(get_db)):
 def test():
     return {"mensaje": "Test exitoso"}
 
+@app.post("/upload/syllabus")
+async def upload_syllabus(
+    file: UploadFile, 
+    account_id: str, # UUID de la empresa dueña del temario
+    db: Session = Depends(get_db)
+):
+    """
+    Sube un PDF, la IA lo analiza, extrae la estructura y lo guarda 
+    vinculado a la cuenta de la empresa especificada.
+    """
+    if not file.filename.endswith(".pdf"):
+         raise HTTPException(status_code=400, detail="Solo se aceptan PDFs por ahora")
+         
+    try:
+        cantidad_temas_raiz = ingest_service.procesar_archivo_temario(db, file, account_id)
+        return {
+            "status": "success", 
+            "message": f"Se procesó el archivo y se crearon {cantidad_temas_raiz} temas principales con sus subtemas.",
+            "account_id": account_id
+        }
+    except Exception as e:
+        print(f"Error procesando archivo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

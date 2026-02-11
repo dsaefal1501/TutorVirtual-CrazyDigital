@@ -5,6 +5,9 @@ from app.models.modelos import BaseConocimiento, MensajeChat, SesionChat, Usuari
 from app.schemas.schemas import PreguntaUsuario, RespuestaTutor, ConocimientoCreate
 import os
 import time
+import threading
+import functools
+from collections import defaultdict
 try:
     from mistralai import Mistral
 except ImportError:
@@ -22,19 +25,139 @@ if api_key and Mistral:
 else:
     client = None # Manejaremos el error si no hay key
 
-def generar_embedding(texto: str):
+# ============================================================================
+# RATE LIMITING, CACHING & RETRY LOGIC
+# ============================================================================
+
+class RateLimiter:
     """
-    Genera el vector numérico para un texto usando Mistral.
+    Controla la frecuencia de peticiones a la API Mistral.
+    Permite máximo 10 requests por minuto para evitar rate limit (429).
+    """
+    def __init__(self, max_requests: int = 10, time_window: float = 60.0):
+        self.max_requests = max_requests
+        self.time_window = time_window
+        self.requests = defaultdict(list)
+        self.lock = threading.Lock()
+    
+    def wait_if_needed(self, key: str = "default"):
+        """Espera si es necesario para respetar el rate limit."""
+        with self.lock:
+            now = time.time()
+            # Limpiar requests antiguos
+            self.requests[key] = [ts for ts in self.requests[key] 
+                                   if now - ts < self.time_window]
+            
+            if len(self.requests[key]) >= self.max_requests:
+                # Calcular espera necesaria
+                wait_time = self.time_window - (now - self.requests[key][0])
+                if wait_time > 0:
+                    time.sleep(wait_time)
+                    now = time.time()
+                    self.requests[key] = [ts for ts in self.requests[key] 
+                                         if now - ts < self.time_window]
+            
+            self.requests[key].append(now)
+
+rate_limiter = RateLimiter(max_requests=10, time_window=60.0)
+
+def embedding_cache(func):
+    """
+    Decorator para cachear embeddings y evitar llamadas redundantes.
+    """
+    cache = {}
+    cache_lock = threading.Lock()
+    
+    @functools.wraps(func)
+    def wrapper(texto: str):
+        # Usar hash del texto como clave
+        cache_key = hash(texto)
+        
+        with cache_lock:
+            if cache_key in cache:
+                return cache[cache_key]
+        
+        # Llamar función original
+        result = func(texto)
+        
+        with cache_lock:
+            cache[cache_key] = result
+        
+        return result
+    
+    return wrapper
+
+def retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0):
+    """
+    Decorator para reintentar peticiones fallidas con backoff exponencial.
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    # Detectar si es error 429 (rate limit)
+                    if "429" in str(e) or "rate_limit" in str(e):
+                        wait_time = base_delay * (2 ** attempt)  # Exponential backoff
+                        print(f"Rate limit detectado. Reintentando en {wait_time}s (intento {attempt + 1}/{max_retries})")
+                        time.sleep(wait_time)
+                    elif attempt < max_retries - 1:
+                        wait_time = base_delay * (2 ** attempt)
+                        print(f"Error: {str(e)}. Reintentando en {wait_time}s (intento {attempt + 1}/{max_retries})")
+                        time.sleep(wait_time)
+            
+            # Si todos los reintentos fallaron
+            raise last_exception
+        
+        return wrapper
+    return decorator
+
+@embedding_cache
+@retry_with_backoff(max_retries=3, base_delay=1.0)
+def _generate_embedding_internal(texto: str):
+    """
+    Llama a la API de Mistral para generar embeddings.
+    Con reintentos exponenciales y caché.
     """
     if not client:
-        # Fallback para pruebas si no hay API Key (retorna vector de ceros)
-        return [0.0] * 1024 
+        return [0.0] * 1024
+    
+    # Rate limiting
+    rate_limiter.wait_if_needed(key="embeddings")
     
     embeddings_batch_response = client.embeddings.create(
         model="mistral-embed",
         inputs=[texto],
     )
     return embeddings_batch_response.data[0].embedding
+
+def generar_embedding(texto: str):
+    """
+    Genera el vector numérico para un texto usando Mistral.
+    Incluye caché, rate limiting y reintentos automáticos.
+    """
+    return _generate_embedding_internal(texto)
+
+@retry_with_backoff(max_retries=3, base_delay=1.0)
+def _call_agent_complete(agent_id: str, messages: list):
+    """
+    Llama al agente Mistral con reintentos automáticos.
+    """
+    rate_limiter.wait_if_needed(key="agents_complete")
+    return client.agents.complete(agent_id=agent_id, messages=messages)
+
+@retry_with_backoff(max_retries=3, base_delay=1.0)
+def _call_agent_stream(agent_id: str, messages: list):
+    """
+    Llama al agente Mistral en modo streaming con reintentos automáticos.
+    """
+    rate_limiter.wait_if_needed(key="agents_stream")
+    return client.agents.stream(agent_id=agent_id, messages=messages)
 
 def buscar_contexto(db: Session, vector_pregunta: list) -> list[BaseConocimiento]:
     """
@@ -147,14 +270,12 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
     # Guardar pregunta del usuario
     _guardar_mensaje(db, sesion.id, "user", pregunta.texto)
 
-    # 5. Llamar al LLM (AGENT)
+    # 5. Llamar al LLM (AGENT) con reintentos
     respuesta_texto = ""
     if client:
         try:
-            chat_response = client.agents.complete(
-                agent_id=agent_id,
-                messages=mensajes_llm,
-            )
+            rate_limiter.wait_if_needed(key="agents_complete")
+            chat_response = _call_agent_complete(agent_id, mensajes_llm)
             respuesta_texto = chat_response.choices[0].message.content
         except Exception as e:
             respuesta_texto = f"[Neutral] Error al comunicar con Mistral: {str(e)}"
@@ -205,15 +326,13 @@ def preguntar_al_tutor_stream(db: Session, pregunta: PreguntaUsuario):
     # Guardar pregunta
     _guardar_mensaje(db, sesion.id, "user", pregunta.texto)
 
-    # 4. Llamar al Agente en Streaming
+    # 4. Llamar al Agente en Streaming con reintentos
     texto_completo_respuesta = ""
     
     if client:
         try:
-            stream_response = client.agents.stream(
-                agent_id=agent_id,
-                messages=mensajes_llm,
-            )
+            rate_limiter.wait_if_needed(key="agents_stream")
+            stream_response = _call_agent_stream(agent_id, mensajes_llm)
             
             for chunk in stream_response:
                 content = chunk.data.choices[0].delta.content
@@ -272,7 +391,7 @@ def sincronizar_temario_a_conocimiento(db: Session) -> int:
         # Inyectamos el Nivel y el Orden directamente en el texto que lee la IA
         contenido_texto = f"[Jerarquía: Nivel {tema.nivel} - Orden {tema.orden} - PadreID {tema.parent_id}] Tema: {tema.nombre}. Contenido: {tema.descripcion}"
         
-        # 3. Generar Embedding
+        # 3. Generar Embedding (con rate limiting automático)
         vector = generar_embedding(contenido_texto)
         
         # 4. Guardar
@@ -285,14 +404,11 @@ def sincronizar_temario_a_conocimiento(db: Session) -> int:
         db.add(nuevo)
         count += 1
         
-        # Rate Limit Mitigation: Esperar 1 segundo entre llamados a la API
-        print(f"Procesado tema {tema.id} ({tema.nombre}). Esperando...")
-        time.sleep(1)
+        print(f"Procesado tema {tema.id} ({tema.nombre}). Rate limiter gestiona automáticamente la frecuencia.")
     
     db.commit()
     return count
 
- 
 
          
 

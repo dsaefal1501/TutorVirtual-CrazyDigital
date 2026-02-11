@@ -1,0 +1,96 @@
+-- 1. ACTIVAR EXTENSIONES NECESARIAS
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; -- Para generar GUIDs como Dataverse
+CREATE EXTENSION IF NOT EXISTS vector;      -- Para tus embeddings
+
+-- 2. TABLA DE EMPRESAS (Equivalente a 'Account' en Dataverse)
+-- Antes: Licencias
+CREATE TABLE Accounts (
+    account_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(150) NOT NULL, -- Nombre de la empresa/colegio
+    subscription_status VARCHAR(50) DEFAULT 'Active', -- Active, Inactive, Suspended
+    max_users INT DEFAULT 50,
+    valid_until DATE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 3. TABLA DE USUARIOS (Equivalente a 'Contact' en Dataverse)
+-- Antes: Usuarios
+CREATE TABLE Contacts (
+    contact_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    account_id UUID REFERENCES Accounts(account_id) ON DELETE CASCADE, -- Vínculo con la empresa
+    full_name VARCHAR(150),
+    email VARCHAR(150) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL, -- Esto NO migrará a Dataverse (se usa Azure AD/B2C), pero necesario ahora
+    role VARCHAR(20) CHECK (role IN ('STUDENT', 'INSTRUCTOR', 'ADMIN')),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 4. TABLA DE TEMARIO (Estructura Jerárquica)
+-- Soporta contenido GLOBAL (account_id NULL) y contenido PERSONALIZADO por empresa
+CREATE TABLE Course_Modules (
+    module_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    account_id UUID REFERENCES Accounts(account_id) ON DELETE CASCADE, -- Si es NULL, es temario estándar para todos
+    parent_module_id UUID REFERENCES Course_Modules(module_id) ON DELETE CASCADE,
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    hierarchy_level INT NOT NULL DEFAULT 1, -- Nivel 1, 2, 3...
+    sort_order INT DEFAULT 0,               -- Para ordenar 1.1, 1.2...
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- 5. BASE DE CONOCIMIENTO (Vectores)
+-- Esta tabla probablemente SE QUEDE en Postgres o vaya a Azure AI Search, no a Dataverse directo.
+CREATE TABLE Knowledge_Base (
+    kb_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    module_id UUID REFERENCES Course_Modules(module_id) ON DELETE CASCADE,
+    account_id UUID REFERENCES Accounts(account_id) ON DELETE CASCADE, -- Redundante pero vital para RAG rápido (filtrar por cliente antes de buscar vector)
+    content_chunk TEXT NOT NULL,
+    embedding VECTOR(1536), -- OJO: Si usas Mistral Embeddings nativos cambia a 1024. Si usas OpenAI, 1536.
+    metadata JSONB DEFAULT '{}' -- Para guardar origen, página, etc.
+);
+
+-- 6. EXÁMENES / TESTS
+CREATE TABLE Assessments (
+    assessment_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    module_id UUID REFERENCES Course_Modules(module_id) ON DELETE SET NULL,
+    account_id UUID REFERENCES Accounts(account_id) ON DELETE CASCADE,
+    title VARCHAR(200) NOT NULL,
+    exam_content JSONB NOT NULL, -- En Dataverse esto sería un archivo o una tabla relacionada 'Preguntas'
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 7. INTENTOS DE ALUMNO
+CREATE TABLE Student_Attempts (
+    attempt_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    contact_id UUID REFERENCES Contacts(contact_id) ON DELETE CASCADE,
+    assessment_id UUID REFERENCES Assessments(assessment_id) ON DELETE CASCADE,
+    score DECIMAL(5, 2),
+    student_responses JSONB,
+    completed_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 8. SESIONES DE CHAT (Historial)
+CREATE TABLE Chat_Sessions (
+    session_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    contact_id UUID REFERENCES Contacts(contact_id) ON DELETE CASCADE,
+    current_module_id UUID REFERENCES Course_Modules(module_id) ON DELETE SET NULL, -- Contexto donde se quedó
+    session_title VARCHAR(200),
+    started_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 9. MENSAJES DEL CHAT
+CREATE TABLE Chat_Messages (
+    message_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id UUID REFERENCES Chat_Sessions(session_id) ON DELETE CASCADE,
+    role VARCHAR(20) CHECK (role IN ('user', 'assistant', 'system')),
+    content TEXT,
+    technical_metadata JSONB DEFAULT '{}', -- Tokens usados, modelo, latencia
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 10. ÍNDICES (CRÍTICO PARA RENDIMIENTO)
+-- Índice para búsqueda vectorial particionada por cliente (tenant)
+CREATE INDEX ON Knowledge_Base (account_id);
+-- Índice HNSW para velocidad (ajusta parameters según necesidad)
+CREATE INDEX ON Knowledge_Base USING hnsw (embedding vector_cosine_ops);
