@@ -16,12 +16,12 @@ AZURE_TTS_DEPLOYMENT = os.getenv("AZURE_TTS_DEPLOYMENT", "gpt-4o-mini-tts")
 TTS_API_VERSION = "2025-03-01-preview"
 
 # Voces disponibles en gpt-4o-mini-tts
-VOCES_DISPONIBLES = ["alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"]
+VOCES_DISPONIBLES = ["onyx"]
 
 
 def generar_audio_tts(
     texto: str,
-    voz: str = "alloy",
+    voz: str = "onyx",
     instrucciones: Optional[str] = None,
 ) -> bytes:
     """
@@ -29,7 +29,7 @@ def generar_audio_tts(
     
     Args:
         texto: El texto a convertir en audio
-        voz: La voz a usar (alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer)
+        voz: La voz a usar (onyx)
         instrucciones: Instrucciones opcionales para controlar el estilo de la voz
     
     Returns:

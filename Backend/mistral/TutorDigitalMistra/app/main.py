@@ -186,7 +186,7 @@ def grade_multiple_choice(req: GradeMultipleRequest, db: Session = Depends(get_d
 @app.post("/tts")
 def text_to_speech(
     texto: str = Form(..., description="Texto a convertir en audio"),
-    voz: str = Form("alloy", description="Voz: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer"),
+    voz: str = Form("onyx", description="Voz: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer"),
     instrucciones: str = Form(None, description="Instrucciones opcionales de estilo de voz"),
 ):
     """
