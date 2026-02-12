@@ -764,112 +764,179 @@ async function playNextTTSChunk() {
     botIsSpeaking = true;
     if (window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
     updateMicVisuals(false, "Hablando...");
+    try {
+        const formData = new FormData();
+        formData.append('texto', texto);
+        formData.append('voz', 'onyx');
+        formData.append('instrucciones', 'Habla con acento castellano de España, de forma natural, cálida y expresiva, como un profesor cercano. Evita sonar robótico. Usa entonación variada y pausas naturales.');
 
-    // Crear y reproducir el audio
-    const audioUrl = URL.createObjectURL(chunk.audioBlob);
-    const audio = new Audio(audioUrl);
-    currentAudio = audio;
-    currentAudioUrl = audioUrl;
+        return new Promise((resolve) => {
+            // Cuando se carguen los metadatos, sabemos la duración
+            audio.addEventListener('loadedmetadata', () => {
+                const duration = audio.duration; // en segundos
+                console.log(`[TTS Chunk ${chunk.id}] Reproduciendo (${duration.toFixed(2)}s): "${chunk.text.substring(0, 40)}..."`);
 
-    return new Promise((resolve) => {
-        // Cuando se carguen los metadatos, sabemos la duración
-        audio.addEventListener('loadedmetadata', () => {
-            const duration = audio.duration; // en segundos
-            console.log(`[TTS Chunk ${chunk.id}] Reproduciendo (${duration.toFixed(2)}s): "${chunk.text.substring(0, 40)}..."`);
+                // Mostrar subtítulos sincronizados con la duración real del audio
+                showSyncedSubtitles(chunk.subtitleWords, duration);
+            });
 
-            // Mostrar subtítulos sincronizados con la duración real del audio
-            showSyncedSubtitles(chunk.subtitleWords, duration);
+            if (!response.ok) {
+                const errText = await response.text();
+                console.error('TTS error:', response.status, errText);
+                finishTTS(onEnd);
+                return;
+            }
+
+            const audioBlob = await response.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+
+            // Liberar URL anterior si existe
+            if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
+
+            const audio = new Audio(audioUrl);
+            currentAudio = audio;
+            currentAudioUrl = audioUrl;
+
+            // Esperar a que el audio tenga duración para sincronizar subtítulos
+            audio.addEventListener('loadedmetadata', () => {
+                const duration = audio.duration; // segundos
+                if (duration && duration > 0) {
+                    showSyncedSubtitles(texto, duration);
+                }
+            });
+
+            audio.addEventListener('ended', () => {
+                URL.revokeObjectURL(audioUrl);
+                currentAudio = null;
+                currentAudioUrl = null;
+                resolve();
+
+                // Reproducir siguiente chunk
+                playNextTTSChunk();
+            });
+
+            audio.addEventListener('error', (e) => {
+                console.error(`[TTS Chunk ${chunk.id}] Error reproduciendo:`, e);
+                URL.revokeObjectURL(audioUrl);
+                currentAudio = null;
+                currentAudioUrl = null;
+                resolve();
+                playNextTTSChunk();
+            });
+
+            audio.play().catch(err => {
+                console.error(`[TTS Chunk ${chunk.id}] Error play():`, err);
+                resolve();
+                playNextTTSChunk();
+            });
         });
-
-        audio.addEventListener('ended', () => {
-            URL.revokeObjectURL(audioUrl);
-            currentAudio = null;
-            currentAudioUrl = null;
-            resolve();
-
-            // Reproducir siguiente chunk
-            playNextTTSChunk();
-        });
-
-        audio.addEventListener('error', (e) => {
-            console.error(`[TTS Chunk ${chunk.id}] Error reproduciendo:`, e);
-            URL.revokeObjectURL(audioUrl);
-            currentAudio = null;
-            currentAudioUrl = null;
-            resolve();
-            playNextTTSChunk();
-        });
-
-        audio.play().catch(err => {
-            console.error(`[TTS Chunk ${chunk.id}] Error play():`, err);
-            resolve();
-            playNextTTSChunk();
-        });
-    });
-}
+    }
 
 /**
  * Muestra subtítulos sincronizados con la duración real del audio.
  * Divide las palabras en grupos legibles y los muestra progresivamente.
  */
 function showSyncedSubtitles(words, audioDurationSec) {
-    if (!words || words.length === 0) return;
+        if (!words || words.length === 0) return;
 
-    const totalWords = words.length;
-    const totalDurationMs = audioDurationSec * 1000;
+        const totalWords = words.length;
+        const totalDurationMs = audioDurationSec * 1000;
 
-    // Calcular cuántas "pantallas" de subtítulos necesitamos
-    // Usamos grupos de hasta SUBTITLE_MAX_WORDS palabras
-    const groups = [];
-    for (let i = 0; i < totalWords; i += SUBTITLE_MAX_WORDS) {
-        groups.push(words.slice(i, i + SUBTITLE_MAX_WORDS).join(" "));
+        // Calcular cuántas "pantallas" de subtítulos necesitamos
+        // Usamos grupos de hasta SUBTITLE_MAX_WORDS palabras
+        const groups = [];
+        for (let i = 0; i < totalWords; i += SUBTITLE_MAX_WORDS) {
+            groups.push(words.slice(i, i + SUBTITLE_MAX_WORDS).join(" "));
+        }
+
+        // Duración por grupo, proporcional a las palabras que contiene
+        const timePerWord = totalDurationMs / totalWords;
+
+        let elapsed = 0;
+        groups.forEach((groupText, idx) => {
+            const wordsInGroup = groupText.split(/\s+/).length;
+            const groupDuration = wordsInGroup * timePerWord;
+
+            setTimeout(() => {
+                if (ttsAborted) return;
+                subtitleText.className = "subtitle-text subtitle-bot";
+                subtitleText.innerText = groupText;
+            }, elapsed);
+
+            elapsed += groupDuration;
+        });
     }
 
-    // Duración por grupo, proporcional a las palabras que contiene
-    const timePerWord = totalDurationMs / totalWords;
 
-    let elapsed = 0;
-    groups.forEach((groupText, idx) => {
-        const wordsInGroup = groupText.split(/\s+/).length;
-        const groupDuration = wordsInGroup * timePerWord;
+    // ===========================================================================
+    // TTS — Control (stop, etc.)
+    // ===========================================================================
 
-        setTimeout(() => {
-            if (ttsAborted) return;
-            subtitleText.className = "subtitle-text subtitle-bot";
-            subtitleText.innerText = groupText;
-        }, elapsed);
+    /**
+     * Detiene todo el pipeline TTS.
+     */
+    function stopTTS() {
+        ttsAborted = true;
+        ttsChunkQueue = [];
+        ttsIsPlaying = false;
+        ttsSentenceBuffer = "";
+        ttsChunkIndex = 0;
+        ttsOnEndCallback = null;
 
-        elapsed += groupDuration;
-    });
-}
-
-
-// ===========================================================================
-// TTS — Control (stop, etc.)
-// ===========================================================================
-
-/**
- * Detiene todo el pipeline TTS.
- */
-function stopTTS() {
-    ttsAborted = true;
-    ttsChunkQueue = [];
-    ttsIsPlaying = false;
-    ttsSentenceBuffer = "";
-    ttsChunkIndex = 0;
-    ttsOnEndCallback = null;
-
-    if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-        currentAudio = null;
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.currentTime = 0;
+            currentAudio = null;
+        }
+        if (currentAudioUrl) {
+            URL.revokeObjectURL(currentAudioUrl);
+            currentAudioUrl = null;
+        }
+        botIsSpeaking = false;
+        // Limpiar subtítulos sincronizados
+        if (window._subtitleTimer) {
+            clearInterval(window._subtitleTimer);
+            window._subtitleTimer = null;
+        }
+        subtitleText.innerText = "";
     }
-    if (currentAudioUrl) {
-        URL.revokeObjectURL(currentAudioUrl);
-        currentAudioUrl = null;
-    }
-    botIsSpeaking = false;
 
-    // Resetear el flag de abort para la próxima vez
-    setTimeout(() => { ttsAborted = false; }, 50);
+    /**
+     * Muestra subtítulos sincronizados con la duración real del audio TTS.
+     * Divide el texto en lotes y los muestra proporcionalmente a la duración.
+     */
+    function showSyncedSubtitles(texto, audioDurationSec) {
+        // Limpiar timer anterior
+        if (window._subtitleTimer) clearInterval(window._subtitleTimer);
+
+        const words = texto.split(/\s+/).filter(w => w.length > 0);
+        if (words.length === 0) return;
+
+        const batchSize = SUBTITLE_BATCH_SIZE; // 7 palabras
+        const batches = [];
+        for (let i = 0; i < words.length; i += batchSize) {
+            batches.push(words.slice(i, i + batchSize).join(' '));
+        }
+
+        const intervalMs = (audioDurationSec * 1000) / batches.length;
+        let batchIndex = 0;
+
+        // Activar animación de habla
+        if (window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
+        subtitleText.className = "subtitle-text subtitle-bot";
+
+        // Mostrar primer lote inmediatamente
+        subtitleText.innerText = batches[0];
+        batchIndex = 1;
+
+        window._subtitleTimer = setInterval(() => {
+            if (batchIndex >= batches.length) {
+                clearInterval(window._subtitleTimer);
+                window._subtitleTimer = null;
+                return;
+            }
+            subtitleText.innerText = batches[batchIndex];
+            batchIndex++;
+        }, intervalMs);
+    }
 }
