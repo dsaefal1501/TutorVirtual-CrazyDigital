@@ -215,14 +215,12 @@ async function handleSendMessage(text) {
     addMessage(text, 'user');
     const typingId = showTyping();
     
-    // NOTA: Eliminado SetTalkingState(1) aquí. El bot esperará a tener subtítulos.
-
     let fullLogText = ""; 
     try {
         await processBackendResponse(text, (chunk) => {
             fullLogText += chunk;
-            const cleanTextFull = fullLogText.length > 16 ? fullLogText.slice(16).trimStart() : "";
-            updateBotMessage(typingId, cleanTextFull);
+            // MODIFICADO: Se eliminó el .slice(16). Ahora pasa todo el texto.
+            updateBotMessage(typingId, fullLogText);
         });
     } catch (error) {
         removeTyping(typingId);
@@ -232,8 +230,6 @@ async function handleSendMessage(text) {
         sendBtn.disabled = false;
         flushStreamBuffer();
         const checkFinishInterval = setInterval(() => {
-            // El SetTalkingState(0) ahora lo maneja processBotSubtitleQueue,
-            // aquí solo vigilamos para reiniciar lógica de UI.
             if (botWordQueue.length === 0 && !isShowingSubtitle) {
                 clearInterval(checkFinishInterval);
             }
@@ -250,14 +246,12 @@ async function handleConversationTurn(text) {
     addMessage(text, 'user');
     const typingId = showTyping();
     
-    // NOTA: Eliminado SetTalkingState(1) aquí.
-
     let fullLogText = ""; 
     try {
         await processBackendResponse(text, (chunk) => {
             fullLogText += chunk;
-            const cleanText = fullLogText.length > 16 ? fullLogText.slice(16).trimStart() : "";
-            updateBotMessage(typingId, cleanText);
+            // MODIFICADO: Se eliminó el .slice(16). Ahora pasa todo el texto.
+            updateBotMessage(typingId, fullLogText);
         });
     } catch (error) {
         console.error(error);
@@ -272,7 +266,6 @@ async function handleConversationTurn(text) {
             clearInterval(checkFinishInterval);
             subtitleText.innerText = ""; 
 
-            // Aseguramos que se calle si quedó algo pendiente (doble check)
             if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
 
             if (isConversationMode) {
@@ -298,8 +291,6 @@ async function processBackendResponse(text, onChunkReceived) {
 
     if (!response.ok) throw new Error("Error del servidor: " + response.status);
 
-    let totalReceivedLength = 0;
-
     if (isStream) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
@@ -310,21 +301,16 @@ async function processBackendResponse(text, onChunkReceived) {
             
             const chunk = decoder.decode(value, { stream: true });
             
-            let validChunk = chunk;
-            if (totalReceivedLength < 16) {
-                const remainingCut = 16 - totalReceivedLength;
-                if (chunk.length > remainingCut) validChunk = chunk.slice(remainingCut);
-                else validChunk = ""; 
-            }
-            totalReceivedLength += chunk.length;
-
-            if (validChunk) queueBotWords(validChunk);
+            // MODIFICADO: Eliminada la lógica que contaba hasta 16 caracteres.
+            if (chunk) queueBotWords(chunk);
             onChunkReceived(chunk);
         }
     } else {
         const data = await response.json();
         const result = data.respuesta || data.mensaje || JSON.stringify(data);
-        if (result.length > 16) queueBotWords(result.slice(16));
+        
+        // MODIFICADO: Se pasa el resultado completo sin slice(16).
+        if (result.length > 0) queueBotWords(result);
         onChunkReceived(result);
     }
 }
