@@ -397,16 +397,12 @@ function processBotSubtitleQueue() {
 
     // --- CASO 1: ETIQUETA DE EMOCIÓN ---
     if (currentItem.type === 'tag') {
-        botWordQueue.shift(); // Consumimos la etiqueta
+        botWordQueue.shift();
         
-        // Enviamos la emoción a Unity (El usuario NO la ve en subtítulos)
         if(window.unityInstance) {
-             // Eliminamos corchetes para enviarlo limpio si quieres, o tal cual.
-             // Tu script de C# ya limpia espacios, pero enviamos tal cual: "[Happy]"
              window.unityInstance.SendMessage('Tutor', 'SetExpression', currentItem.value);
         }
 
-        // Recursión INMEDIATA (sin espera) para procesar lo siguiente
         processBotSubtitleQueue(); 
         return;
     }
