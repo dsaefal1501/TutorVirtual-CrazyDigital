@@ -1,228 +1,426 @@
-const API_URL = 'http://192.168.18.6:8000'; // Tu IP local
+// --- CONFIGURACIÓN E INICIALIZACIÓN DE UNITY ---
+function loadUnity() {
+    var canvas = document.querySelector("#unity-canvas");
+    var config = {
+        dataUrl: "BuildVanilla/Build/BuildVanilla.data.unityweb",
+        frameworkUrl: "BuildVanilla/Build/BuildVanilla.framework.js.unityweb",
+        codeUrl: "BuildVanilla/Build/BuildVanilla.wasm.unityweb",
+        streamingAssetsUrl: "BuildVanilla/StreamingAssets",
+        companyName: "DefaultCompany",
+        productName: "TutorVirtual",
+        productVersion: "0.1.0",
+    };
+    
+    var script = document.createElement("script");
+    script.src = "BuildVanilla/Build/BuildVanilla.loader.js";
+    script.onload = () => {
+        createUnityInstance(canvas, config).then((unityInstance) => {
+            window.unityInstance = unityInstance; 
+            document.getElementById('loading-overlay').style.display = 'none';
+            document.getElementById('statusDot').classList.add('online');
+            document.getElementById('connectionStatus').innerText = "En línea";
+        }).catch((message) => { alert(message); });
+    };
+    script.onerror = () => { document.getElementById('loading-overlay').style.display = 'none'; }
+    document.body.appendChild(script);
+}
 
-// Elementos DOM
+// Iniciar Unity al cargar la página
+document.addEventListener("DOMContentLoaded", loadUnity);
+
+
+// --- LÓGICA DE LA APLICACIÓN (CHAT & RECONOCIMIENTO) ---
+
+const API_URL = 'http://192.168.18.6:8000'; // Asegúrate de que esta IP sea accesible
+
+// Referencias del DOM
 const chatWidget = document.getElementById('chat-widget');
 const toggleBtn = document.getElementById('chatbot-toggle-btn');
-const chatForm = document.getElementById('chatForm');
+const closeChatBtn = document.getElementById('close-chat-btn');
 const userInput = document.getElementById('userInput');
 const chatContainer = document.getElementById('chatContainer');
-const sendBtn = document.getElementById('sendBtn');
-const connectionStatus = document.getElementById('connectionStatus');
-const statusDot = document.querySelector('.status-dot');
+const micBtn = document.getElementById('mic-btn');
+const micIcon = document.getElementById('mic-icon');
+const micLabel = document.getElementById('mic-label');
 const streamToggle = document.getElementById('streamToggle');
+const sendBtn = document.getElementById('sendBtn');
+const subtitleText = document.getElementById('subtitle-text');
+const chatForm = document.getElementById('chatForm');
 
+// Estado
+let isChatOpen = false;
+let isConversationMode = false; 
+let recognition = null;
+let botIsSpeaking = false; 
 let isProcessing = false;
 
-// --- INICIALIZACIÓN ---
-document.addEventListener('DOMContentLoaded', () => {
-    checkConnection();
-    
-    if (userInput) {
-        // Auto-resize del textarea
-        userInput.addEventListener('input', function () {
-            this.style.height = 'auto';
-            this.style.height = (this.scrollHeight) + 'px';
-            if (sendBtn) sendBtn.disabled = this.value.trim() === '';
-        });
+// Variables para subtítulos
+let botWordQueue = []; 
+let isShowingSubtitle = false;
+let streamBuffer = ""; 
+const TIME_PER_WORD_MS = 320; 
+const MIN_TIME_ON_SCREEN_MS = 1500;
 
-        // Enviar con Enter
-        userInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (sendBtn && !sendBtn.disabled) handleSubmit();
+// Configuración de Reconocimiento de Voz
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'es-ES';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    recognition.onstart = () => {
+        updateMicVisuals(true, "Escuchando...");
+        clearBotSubtitles();
+    };
+
+    recognition.onend = () => {
+        if (isConversationMode && !botIsSpeaking) {
+            updateMicVisuals(false, "Pausado");
+        }
+        if (!isProcessing && !botIsSpeaking) {
+                setTimeout(() => { if(!botIsSpeaking) subtitleText.innerText = ""; }, 2000);
+        }
+    };
+
+    recognition.onresult = (event) => {
+        let transcript = '';
+        let interimTranscript = '';
+        let isFinal = false;
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const t = event.results[i][0].transcript;
+            transcript += t;
+            interimTranscript += t;
+            if (event.results[i].isFinal) isFinal = true;
+        }
+
+        updateUserSubtitle(interimTranscript);
+
+        if (isChatOpen) {
+            userInput.value = transcript;
+            autoResizeInput();
+        }
+
+        if (isFinal && transcript.trim() !== "") {
+            setTimeout(() => { if(!botIsSpeaking) subtitleText.innerText = ""; }, 500);
+            if (isChatOpen) {
+                handleSendMessage(transcript);
+            } else {
+                handleConversationTurn(transcript);
             }
-        });
-    }
+        }
+    };
+}
 
-    if (chatForm) {
-        chatForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            handleSubmit();
-        });
+// --- EVENT LISTENERS ---
+
+micBtn.addEventListener('click', handleMicClick);
+toggleBtn.addEventListener('click', toggleChat);
+closeChatBtn.addEventListener('click', toggleChat);
+
+chatForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if(userInput.value.trim()) handleSendMessage(userInput.value.trim());
+});
+
+userInput.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' && !e.shiftKey) { 
+        e.preventDefault(); 
+        if(userInput.value.trim()) handleSendMessage(userInput.value.trim()); 
     }
 });
 
-// --- COMUNICACIÓN CON UNITY ---
-function setUnityTalk(isTalking) {
-    if (window.unityInstance) {
-        try {
-            window.unityInstance.SendMessage('Tutor', 'SetTalkingState', isTalking ? 1 : 0);
-        } catch (e) {
-            console.warn("Unity no está listo aún:", e);
-        }
+
+// --- FUNCIONES LÓGICAS ---
+
+function handleMicClick() {
+    if (!recognition) return alert("Navegador no compatible");
+    if (isChatOpen) {
+        if (micBtn.classList.contains('is-listening')) recognition.stop();
+        else recognition.start();
+    } else {
+        if (isConversationMode) stopConversationMode();
+        else startConversationMode();
     }
 }
 
-// --- LÓGICA DEL CHAT ---
-window.toggleChat = function() {
-    if (!chatWidget || !toggleBtn) return;
-    
+function toggleChat() {
     if (chatWidget.style.display === 'none' || chatWidget.style.display === '') {
         chatWidget.style.display = 'flex';
         toggleBtn.style.display = 'none';
-        if(userInput) userInput.focus();
+        micBtn.classList.add('mic-shifted');
+        isChatOpen = true;
+        if(isConversationMode) stopConversationMode();
+        scrollToBottom();
     } else {
         chatWidget.style.display = 'none';
         toggleBtn.style.display = 'flex';
+        micBtn.classList.remove('mic-shifted');
+        isChatOpen = false;
     }
 }
 
-async function checkConnection() {
-    try {
-        const response = await fetch(`${API_URL}/`);
-        updateStatus(response.ok);
-    } catch (error) {
-        updateStatus(false);
+// Busca esta función en tu script.js y reemplázala por esta versión:
+function startConversationMode() {
+    isConversationMode = true;
+    try { 
+        recognition.start(); 
+    } catch(e) {
+        // Si ya estaba escuchando, el error 'invalid state' es normal, lo ignoramos.
+        // Pero si es otro error, lo mostramos en consola.
+        if (e.name !== 'InvalidStateError') {
+            console.error("Error al iniciar el micro:", e);
+            alert("No se pudo iniciar el micrófono: " + e.message);
+        }
     }
 }
 
-function updateStatus(isOnline) {
-    if (statusDot) statusDot.className = isOnline ? 'status-dot online' : 'status-dot offline';
-    if (connectionStatus) {
-        connectionStatus.textContent = isOnline ? 'Conectado' : 'Desconectado';
-        connectionStatus.className = isOnline ? 'text-success' : 'text-danger';
+function stopConversationMode() {
+    isConversationMode = false;
+    botIsSpeaking = false;
+    clearBotSubtitles();
+    try { recognition.stop(); } catch(e){}
+    updateMicVisuals(false, "Escuchando...");
+}
+
+function updateMicVisuals(listening, text) {
+    micLabel.innerText = text;
+    if (listening) {
+        micBtn.classList.add('is-listening');
+        micBtn.classList.remove('is-bot-speaking');
+        micIcon.className = "bi bi-mic-fill";
+    } else {
+        micBtn.classList.remove('is-listening');
+        if (botIsSpeaking && isConversationMode) {
+            micBtn.classList.add('is-bot-speaking');
+            micIcon.className = "bi bi-volume-up-fill";
+            micLabel.innerText = "Hablando...";
+        } else {
+            micBtn.classList.remove('is-bot-speaking');
+            micIcon.className = "bi bi-mic-fill";
+        }
     }
 }
 
-async function handleSubmit() {
-    const text = userInput.value.trim();
+// --- GESTIÓN DE MENSAJES Y BACKEND ---
+
+async function handleSendMessage(text) {
     if (!text || isProcessing) return;
-
-    // UI Reset
-    userInput.value = '';
-    userInput.style.height = 'auto';
-    sendBtn.disabled = true;
     isProcessing = true;
+    userInput.value = '';
+    autoResizeInput();
+    sendBtn.disabled = true;
 
-    // Mostrar mensaje usuario
+    clearBotSubtitles();
     addMessage(text, 'user');
     const typingId = showTyping();
+    if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
 
+    let fullLogText = ""; 
     try {
-        const isStream = streamToggle && streamToggle.checked;
-        const endpoint = isStream ? '/ask/stream' : '/ask';
-
-        const response = await fetch(`${API_URL}${endpoint}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ texto: text, usuario_id: 2 })
+        await processBackendResponse(text, (chunk) => {
+            fullLogText += chunk;
+            const cleanTextFull = fullLogText.length > 16 ? fullLogText.slice(16).trimStart() : "";
+            updateBotMessage(typingId, cleanTextFull);
         });
-
-        if (!response.ok) throw new Error(`Error ${response.status}`);
-
-        removeTyping(typingId);
-
-        // >>> ACTIVAR ANIMACIÓN UNITY <<<
-        setUnityTalk(true);
-
-        if (isStream) {
-            await handleStream(response);
-            // El stream termina dentro de handleStream
-        } else {
-            const data = await response.json();
-            let botText = data.respuesta || data.mensaje || JSON.stringify(data);
-            addMessage(botText, 'bot');
-            
-            // >>> DESACTIVAR ANIMACIÓN UNITY (Modo normal) <<<
-            setUnityTalk(false);
-        }
-
     } catch (error) {
         removeTyping(typingId);
-        addMessage(`Error: ${error.message}`, 'bot');
-        
-        // >>> DESACTIVAR ANIMACIÓN UNITY (Error) <<<
-        setUnityTalk(false);
+        addMessage("Error: " + error.message, 'bot');
     } finally {
         isProcessing = false;
-        if(userInput) userInput.focus();
+        sendBtn.disabled = false;
+        flushStreamBuffer(); 
+        const checkFinishInterval = setInterval(() => {
+            if (botWordQueue.length === 0 && !isShowingSubtitle) {
+                if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
+                clearInterval(checkFinishInterval);
+            }
+        }, 500);
     }
 }
 
-async function handleStream(response) {
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    const contentDiv = createMessageContainer('bot');
-    let accumulatedText = "";
+async function handleConversationTurn(text) {
+    botIsSpeaking = true; 
+    try { recognition.stop(); } catch(e){}
+    updateMicVisuals(false, "Pensando...");
 
+    clearBotSubtitles();
+    addMessage(text, 'user');
+    const typingId = showTyping();
+    if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
+
+    let fullLogText = ""; 
     try {
+        await processBackendResponse(text, (chunk) => {
+            fullLogText += chunk;
+            const cleanText = fullLogText.length > 16 ? fullLogText.slice(16).trimStart() : "";
+            updateBotMessage(typingId, cleanText);
+        });
+    } catch (error) {
+        console.error(error);
+        removeTyping(typingId);
+    }
+
+    updateMicVisuals(false, "Hablando...");
+    flushStreamBuffer();
+
+    const checkFinishInterval = setInterval(() => {
+        if (botWordQueue.length === 0 && !isShowingSubtitle) {
+            if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
+            clearInterval(checkFinishInterval);
+            subtitleText.innerText = ""; 
+
+            if (isConversationMode) {
+                botIsSpeaking = false;
+                try { recognition.start(); } catch(e) {}
+            } else {
+                botIsSpeaking = false;
+                updateMicVisuals(false, "Escuchando...");
+            }
+        }
+    }, 500);
+}
+
+async function processBackendResponse(text, onChunkReceived) {
+    const isStream = streamToggle && streamToggle.checked;
+    const endpoint = isStream ? '/ask/stream' : '/ask';
+    
+    const response = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: text, usuario_id: 2 })
+    });
+
+    if (!response.ok) throw new Error("Error del servidor: " + response.status);
+
+    let totalReceivedLength = 0;
+
+    if (isStream) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        
         while (true) {
             const { done, value } = await reader.read();
-            if (done) {
-                // >>> DESACTIVAR ANIMACIÓN UNITY (Fin Stream) <<<
-                setUnityTalk(false);
-                break;
-            }
+            if (done) break;
+            
             const chunk = decoder.decode(value, { stream: true });
-            accumulatedText += chunk;
             
-            // Usamos marked si está disponible, sino texto plano
-            if (typeof marked !== 'undefined') {
-                contentDiv.innerHTML = marked.parse(accumulatedText);
-            } else {
-                contentDiv.innerText = accumulatedText;
+            let validChunk = chunk;
+            if (totalReceivedLength < 16) {
+                const remainingCut = 16 - totalReceivedLength;
+                if (chunk.length > remainingCut) validChunk = chunk.slice(remainingCut);
+                else validChunk = ""; 
             }
-            
-            scrollToBottom();
+            totalReceivedLength += chunk.length;
+
+            if (validChunk) queueBotWords(validChunk);
+            onChunkReceived(chunk);
         }
-    } catch (error) {
-        contentDiv.innerHTML += `<br><small class="text-danger">Error en stream</small>`;
-        setUnityTalk(false);
+    } else {
+        const data = await response.json();
+        const result = data.respuesta || data.mensaje || JSON.stringify(data);
+        if (result.length > 16) queueBotWords(result.slice(16));
+        onChunkReceived(result);
     }
 }
 
-// --- UTILIDADES UI ---
-function addMessage(text, role) {
-    const contentDiv = createMessageContainer(role);
-    if (typeof marked !== 'undefined') {
-        contentDiv.innerHTML = marked.parse(text);
-    } else {
-        contentDiv.innerText = text;
+// --- FUNCIONES DE INTERFAZ AUXILIARES ---
+
+function updateUserSubtitle(text) {
+    if (!text) return;
+    subtitleText.className = "subtitle-text subtitle-user";
+    const words = text.trim().split(/\s+/);
+    const lastWords = words.length > 7 ? words.slice(-7) : words;
+    subtitleText.innerText = lastWords.join(" ");
+}
+
+function queueBotWords(chunkText) {
+    if (!chunkText) return;
+    
+    streamBuffer += chunkText;
+    const lastSpaceIndex = streamBuffer.lastIndexOf(" ");
+    
+    if (lastSpaceIndex !== -1) {
+        const completeWordsPart = streamBuffer.substring(0, lastSpaceIndex);
+        streamBuffer = streamBuffer.substring(lastSpaceIndex); 
+        
+        const words = completeWordsPart.split(/\s+/).filter(w => w.length > 0);
+        botWordQueue.push(...words);
     }
+
+    processBotSubtitleQueue();
+}
+
+function flushStreamBuffer() {
+    if (streamBuffer.trim().length > 0) {
+        const words = streamBuffer.trim().split(/\s+/).filter(w => w.length > 0);
+        botWordQueue.push(...words);
+        streamBuffer = "";
+    }
+    processBotSubtitleQueue();
+}
+
+function processBotSubtitleQueue() {
+    if (isShowingSubtitle || botWordQueue.length === 0) return;
+
+    isShowingSubtitle = true;
+    const chunk = botWordQueue.splice(0, 7); 
+    const textToShow = chunk.join(" ");
+
+    subtitleText.className = "subtitle-text subtitle-bot";
+    subtitleText.innerText = textToShow;
+
+    const duration = Math.max(MIN_TIME_ON_SCREEN_MS, chunk.length * TIME_PER_WORD_MS);
+
+    setTimeout(() => {
+        if (botWordQueue.length === 0) {
+            subtitleText.innerText = "";
+            isShowingSubtitle = false;
+        } else {
+            isShowingSubtitle = false;
+            processBotSubtitleQueue();
+        }
+    }, duration);
+}
+
+function clearBotSubtitles() {
+    botWordQueue = [];
+    isShowingSubtitle = false;
+    streamBuffer = "";
+    subtitleText.innerText = "";
+}
+
+function addMessage(text, role) {
+    const div = document.createElement('div');
+    div.className = `message ${role}`;
+    div.innerHTML = `<div class="avatar">${role==='bot'?'🤖':'👤'}</div><div class="message-content"></div>`;
+    const content = div.querySelector('.message-content');
+    content.innerHTML = typeof marked !== 'undefined' ? marked.parse(text) : text;
+    chatContainer.appendChild(div);
     scrollToBottom();
 }
 
-function createMessageContainer(role) {
-    const msgDiv = document.createElement('div');
-    msgDiv.className = `message ${role}`;
-    
-    const avatarDiv = document.createElement('div');
-    avatarDiv.className = `avatar ${role === 'user' ? 'user-avatar' : 'bot-avatar'} shadow-sm`;
-    avatarDiv.innerHTML = role === 'user' ? '<i class="bi bi-person-fill"></i>' : '<i class="bi bi-robot"></i>';
-
-    const contentWrapper = document.createElement('div');
-    contentWrapper.className = 'message-content shadow-sm';
-
-    msgDiv.appendChild(avatarDiv);
-    msgDiv.appendChild(contentWrapper);
-    
-    if(chatContainer) chatContainer.appendChild(msgDiv);
-    return contentWrapper;
-}
-
 function showTyping() {
-    const id = `typing-${Date.now()}`;
-    const msgDiv = document.createElement('div');
-    msgDiv.className = 'message bot';
-    msgDiv.id = id;
-    msgDiv.innerHTML = `
-        <div class="avatar bot-avatar shadow-sm"><i class="bi bi-robot"></i></div>
-        <div class="message-content shadow-sm">
-            <div class="typing-indicator">...</div>
-        </div>`;
-    
-    if(chatContainer) {
-        chatContainer.appendChild(msgDiv);
-        scrollToBottom();
-    }
+    const id = `msg-${Date.now()}`;
+    const div = document.createElement('div');
+    div.className = 'message bot';
+    div.id = id;
+    div.innerHTML = `<div class="avatar">🤖</div><div class="message-content">...</div>`;
+    chatContainer.appendChild(div);
+    scrollToBottom();
     return id;
 }
 
-function removeTyping(id) {
+function updateBotMessage(id, cleanText) {
     const el = document.getElementById(id);
-    if (el) el.remove();
+    if (!el) return;
+    const content = el.querySelector('.message-content');
+    content.innerText = cleanText; 
+    scrollToBottom();
 }
 
-function scrollToBottom() {
-    if(chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
-}
+function removeTyping(id) { document.getElementById(id)?.remove(); }
+function scrollToBottom() { setTimeout(() => { chatContainer.scrollTop = chatContainer.scrollHeight; }, 50); }
+function autoResizeInput() { userInput.style.height = 'auto'; userInput.style.height = userInput.scrollHeight + 'px'; }
