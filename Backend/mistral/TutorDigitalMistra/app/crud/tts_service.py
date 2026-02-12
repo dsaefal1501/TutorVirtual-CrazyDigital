@@ -51,16 +51,26 @@ def generar_audio_tts(
         f"{AZURE_TTS_DEPLOYMENT}/audio/speech?api-version={TTS_API_VERSION}"
     )
     
+    # Instrucciones por defecto para mantener voz consistente entre chunks
+    DEFAULT_INSTRUCTIONS = (
+        "Eres un profesor virtual masculino llamado Pablo. "
+        "Habla siempre en español castellano con un tono calmado, amigable y profesional. "
+        "Mantén un ritmo de habla constante y moderado. "
+        "Tu voz es grave-media, clara y natural. "
+        "No cambies de estilo, tono ni ritmo entre frases. "
+        "No dramatices ni exageres la entonación."
+    )
+
     # Payload
     payload = {
         "model": AZURE_TTS_DEPLOYMENT,
         "input": texto,
         "voice": voz,
+        "speed": 1.0,
     }
     
-    # Si hay instrucciones de estilo, agregarlas
-    if instrucciones:
-        payload["instructions"] = instrucciones
+    # Usar instrucciones proporcionadas o las por defecto (siempre enviar instrucciones)
+    payload["instructions"] = instrucciones if instrucciones else DEFAULT_INSTRUCTIONS
     
     headers = {
         "Content-Type": "application/json",
