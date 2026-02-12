@@ -10,12 +10,12 @@ function loadUnity() {
         productName: "TutorVirtual",
         productVersion: "0.1.0",
     };
-    
+
     var script = document.createElement("script");
     script.src = "BuildVanilla/Build/BuildVanilla.loader.js";
     script.onload = () => {
         createUnityInstance(canvas, config).then((unityInstance) => {
-            window.unityInstance = unityInstance; 
+            window.unityInstance = unityInstance;
             document.getElementById('loading-overlay').style.display = 'none';
             document.getElementById('statusDot').classList.add('online');
             document.getElementById('connectionStatus').innerText = "En línea";
@@ -46,21 +46,27 @@ const streamToggle = document.getElementById('streamToggle');
 const sendBtn = document.getElementById('sendBtn');
 const subtitleText = document.getElementById('subtitle-text');
 const chatForm = document.getElementById('chatForm');
+const ttsToggle = document.getElementById('ttsToggle');
 
 // Estado
 let isChatOpen = false;
-let isConversationMode = false; 
+let isConversationMode = false;
 let recognition = null;
-let botIsSpeaking = false; 
+let botIsSpeaking = false;
 let isProcessing = false;
+
+// --- TTS Estado ---
+let currentAudio = null;       // HTMLAudioElement activo
+let currentAudioUrl = null;    // URL.createObjectURL activo (para liberar memoria)
+let ttsEnabled = true;         // Toggle global de TTS
 
 // --- CONFIGURACIÓN DE SUBTÍTULOS Y EMOCIONES ---
 let botWordQueue = []; // Ahora guardará objetos {type: 'tag'|'word', value: '...'}
 let isShowingSubtitle = false;
-let streamBuffer = ""; 
-const TIME_PER_WORD_MS = 320; 
+let streamBuffer = "";
+const TIME_PER_WORD_MS = 320;
 const MIN_TIME_ON_SCREEN_MS = 1500;
-const SUBTITLE_BATCH_SIZE = 7; 
+const SUBTITLE_BATCH_SIZE = 7;
 const TAG_REGEX = /(\[.*?\])/g; // Regex para capturar [Etiquetas]
 
 // Configuración de Reconocimiento de Voz
@@ -82,7 +88,7 @@ if (SpeechRecognition) {
             updateMicVisuals(false, "Pausado");
         }
         if (!isProcessing && !botIsSpeaking) {
-                setTimeout(() => { if(!botIsSpeaking) subtitleText.innerText = ""; }, 2000);
+            setTimeout(() => { if (!botIsSpeaking) subtitleText.innerText = ""; }, 2000);
         }
     };
 
@@ -106,7 +112,7 @@ if (SpeechRecognition) {
         }
 
         if (isFinal && transcript.trim() !== "") {
-            setTimeout(() => { if(!botIsSpeaking) subtitleText.innerText = ""; }, 500);
+            setTimeout(() => { if (!botIsSpeaking) subtitleText.innerText = ""; }, 500);
             if (isChatOpen) {
                 handleSendMessage(transcript);
             } else {
@@ -124,13 +130,21 @@ closeChatBtn.addEventListener('click', toggleChat);
 
 chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    if(userInput.value.trim()) handleSendMessage(userInput.value.trim());
+    if (userInput.value.trim()) handleSendMessage(userInput.value.trim());
 });
 
+// TTS toggle
+if (ttsToggle) {
+    ttsToggle.addEventListener('change', () => {
+        ttsEnabled = ttsToggle.checked;
+        if (!ttsEnabled) stopTTS();
+    });
+}
+
 userInput.addEventListener('keydown', (e) => {
-    if(e.key === 'Enter' && !e.shiftKey) { 
-        e.preventDefault(); 
-        if(userInput.value.trim()) handleSendMessage(userInput.value.trim()); 
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (userInput.value.trim()) handleSendMessage(userInput.value.trim());
     }
 });
 
@@ -154,7 +168,7 @@ function toggleChat() {
         toggleBtn.style.display = 'none';
         micBtn.classList.add('mic-shifted');
         isChatOpen = true;
-        if(isConversationMode) stopConversationMode();
+        if (isConversationMode) stopConversationMode();
         scrollToBottom();
     } else {
         chatWidget.style.display = 'none';
@@ -166,9 +180,9 @@ function toggleChat() {
 
 function startConversationMode() {
     isConversationMode = true;
-    try { 
-        recognition.start(); 
-    } catch(e) {
+    try {
+        recognition.start();
+    } catch (e) {
         if (e.name !== 'InvalidStateError') {
             console.error("Error al iniciar el micro:", e);
             alert("No se pudo iniciar el micrófono: " + e.message);
@@ -180,7 +194,7 @@ function stopConversationMode() {
     isConversationMode = false;
     botIsSpeaking = false;
     clearBotSubtitles();
-    try { recognition.stop(); } catch(e){}
+    try { recognition.stop(); } catch (e) { }
     updateMicVisuals(false, "Escuchando...");
 }
 
@@ -212,17 +226,15 @@ async function handleSendMessage(text) {
     autoResizeInput();
     sendBtn.disabled = true;
 
+    stopTTS(); // Detener cualquier audio anterior
     clearBotSubtitles();
     addMessage(text, 'user');
     const typingId = showTyping();
-    
-    let fullLogText = ""; 
+
+    let fullLogText = "";
     try {
         await processBackendResponse(text, (chunk) => {
             fullLogText += chunk;
-            // Mostramos todo el texto en el chat (incluyendo etiquetas si quieres depurar, 
-            // o podrías limpiarlas visualmente aquí también si prefieres).
-            // De momento lo dejamos raw para que veas qué llega.
             updateBotMessage(typingId, fullLogText);
         });
     } catch (error) {
@@ -232,6 +244,12 @@ async function handleSendMessage(text) {
         isProcessing = false;
         sendBtn.disabled = false;
         flushStreamBuffer();
+
+        // Lanzar TTS con el texto completo
+        if (ttsEnabled && fullLogText.trim()) {
+            playTTS(fullLogText);
+        }
+
         const checkFinishInterval = setInterval(() => {
             if (botWordQueue.length === 0 && !isShowingSubtitle) {
                 clearInterval(checkFinishInterval);
@@ -241,15 +259,16 @@ async function handleSendMessage(text) {
 }
 
 async function handleConversationTurn(text) {
-    botIsSpeaking = true; 
-    try { recognition.stop(); } catch(e){}
+    botIsSpeaking = true;
+    try { recognition.stop(); } catch (e) { }
     updateMicVisuals(false, "Pensando...");
 
+    stopTTS(); // Detener audio anterior
     clearBotSubtitles();
     addMessage(text, 'user');
     const typingId = showTyping();
-    
-    let fullLogText = ""; 
+
+    let fullLogText = "";
     try {
         await processBackendResponse(text, (chunk) => {
             fullLogText += chunk;
@@ -263,28 +282,45 @@ async function handleConversationTurn(text) {
     updateMicVisuals(false, "Hablando...");
     flushStreamBuffer();
 
-    const checkFinishInterval = setInterval(() => {
-        if (botWordQueue.length === 0 && !isShowingSubtitle) {
-            clearInterval(checkFinishInterval);
-            subtitleText.innerText = ""; 
-
-            if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
+    // Lanzar TTS con el texto completo
+    if (ttsEnabled && fullLogText.trim()) {
+        playTTS(fullLogText, () => {
+            // Callback cuando el audio termina
+            subtitleText.innerText = "";
+            if (window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
 
             if (isConversationMode) {
                 botIsSpeaking = false;
-                try { recognition.start(); } catch(e) {}
+                try { recognition.start(); } catch (e) { }
             } else {
                 botIsSpeaking = false;
                 updateMicVisuals(false, "Escuchando...");
             }
-        }
-    }, 500);
+        });
+    } else {
+        // Sin TTS: fallback al sistema anterior de subtítulos
+        const checkFinishInterval = setInterval(() => {
+            if (botWordQueue.length === 0 && !isShowingSubtitle) {
+                clearInterval(checkFinishInterval);
+                subtitleText.innerText = "";
+                if (window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
+
+                if (isConversationMode) {
+                    botIsSpeaking = false;
+                    try { recognition.start(); } catch (e) { }
+                } else {
+                    botIsSpeaking = false;
+                    updateMicVisuals(false, "Escuchando...");
+                }
+            }
+        }, 500);
+    }
 }
 
 async function processBackendResponse(text, onChunkReceived) {
     const isStream = streamToggle && streamToggle.checked;
     const endpoint = isStream ? '/ask/stream' : '/ask';
-    
+
     const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -296,20 +332,20 @@ async function processBackendResponse(text, onChunkReceived) {
     if (isStream) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
-        
+
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            
+
             const chunk = decoder.decode(value, { stream: true });
-            
+
             if (chunk) queueBotWords(chunk);
             onChunkReceived(chunk);
         }
     } else {
         const data = await response.json();
         const result = data.respuesta || data.mensaje || JSON.stringify(data);
-        
+
         if (result.length > 0) queueBotWords(result);
         onChunkReceived(result);
     }
@@ -329,9 +365,9 @@ function updateUserSubtitle(text) {
 
 function queueBotWords(chunkText) {
     if (!chunkText) return;
-    
+
     streamBuffer += chunkText;
-    
+
     // Buscamos un punto seguro para cortar (último cierre de corchete o espacio)
     // para no dejar una etiqueta o palabra a medias.
     const lastTagClose = streamBuffer.lastIndexOf("]");
@@ -341,7 +377,7 @@ function queueBotWords(chunkText) {
     if (safeIndex !== -1) {
         const completePart = streamBuffer.substring(0, safeIndex + 1);
         streamBuffer = streamBuffer.substring(safeIndex + 1);
-        
+
         // Magia: Separamos las etiquetas del texto usando Regex
         const parts = completePart.split(TAG_REGEX);
 
@@ -365,8 +401,8 @@ function queueBotWords(chunkText) {
 function flushStreamBuffer() {
     // Procesamos lo que quede en el buffer final
     if (streamBuffer.trim().length > 0) {
-         const parts = streamBuffer.split(TAG_REGEX);
-         parts.forEach(part => {
+        const parts = streamBuffer.split(TAG_REGEX);
+        parts.forEach(part => {
             if (TAG_REGEX.test(part)) {
                 botWordQueue.push({ type: 'tag', value: part });
             } else if (part.trim().length > 0) {
@@ -385,39 +421,39 @@ function processBotSubtitleQueue() {
     if (botWordQueue.length === 0) {
         isShowingSubtitle = false;
         subtitleText.innerText = "";
-        
+
         // Paramos animación de habla
-        if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
+        if (window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
         return;
     }
 
     isShowingSubtitle = true;
-    
+
     const currentItem = botWordQueue[0];
 
     // --- CASO 1: ETIQUETA DE EMOCIÓN ---
     if (currentItem.type === 'tag') {
         botWordQueue.shift();
-        
-        if(window.unityInstance) {
-             window.unityInstance.SendMessage('Tutor', 'SetExpression', currentItem.value);
+
+        if (window.unityInstance) {
+            window.unityInstance.SendMessage('Tutor', 'SetExpression', currentItem.value);
         }
 
-        processBotSubtitleQueue(); 
+        processBotSubtitleQueue();
         return;
     }
 
     // --- CASO 2: PALABRA (Texto visible) ---
-    
+
     // Animación de habla ON
-    if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
+    if (window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
 
     // Cogemos un lote de palabras
     let batch = [];
     let i = 0;
-    
+
     // Llenamos el batch, pero paramos si nos topamos con una etiqueta
-    while(i < SUBTITLE_BATCH_SIZE && botWordQueue.length > 0 && botWordQueue[0].type === 'word') {
+    while (i < SUBTITLE_BATCH_SIZE && botWordQueue.length > 0 && botWordQueue[0].type === 'word') {
         batch.push(botWordQueue.shift().value);
         i++;
     }
@@ -439,13 +475,13 @@ function clearBotSubtitles() {
     isShowingSubtitle = false;
     streamBuffer = "";
     subtitleText.innerText = "";
-    if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
+    if (window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
 }
 
 function addMessage(text, role) {
     const div = document.createElement('div');
     div.className = `message ${role}`;
-    div.innerHTML = `<div class="avatar">${role==='bot'?'🤖':'👤'}</div><div class="message-content"></div>`;
+    div.innerHTML = `<div class="avatar">${role === 'bot' ? '🤖' : '👤'}</div><div class="message-content"></div>`;
     const content = div.querySelector('.message-content');
     content.innerHTML = typeof marked !== 'undefined' ? marked.parse(text) : text;
     chatContainer.appendChild(div);
@@ -467,10 +503,128 @@ function updateBotMessage(id, cleanText) {
     const el = document.getElementById(id);
     if (!el) return;
     const content = el.querySelector('.message-content');
-    content.innerText = cleanText; 
+    content.innerText = cleanText;
     scrollToBottom();
 }
 
 function removeTyping(id) { document.getElementById(id)?.remove(); }
 function scrollToBottom() { setTimeout(() => { chatContainer.scrollTop = chatContainer.scrollHeight; }, 50); }
 function autoResizeInput() { userInput.style.height = 'auto'; userInput.style.height = userInput.scrollHeight + 'px'; }
+
+
+// ===========================================================================
+// TTS — Text-to-Speech (Azure gpt-4o-mini-tts via backend /tts)
+// ===========================================================================
+
+/**
+ * Limpia el texto para TTS: elimina etiquetas [Emotion], markdown, etc.
+ */
+function cleanTextForTTS(rawText) {
+    let cleaned = rawText
+        .replace(/\[.*?\]/g, '')      // Eliminar [Tags]
+        .replace(/[#*_~`>]/g, '')     // Eliminar marcadores Markdown
+        .replace(/\n{2,}/g, '. ')     // Doble salto → pausa
+        .replace(/\n/g, ' ')          // Salto simple → espacio
+        .replace(/\s{2,}/g, ' ')      // Múltiples espacios
+        .trim();
+    return cleaned;
+}
+
+/**
+ * Reproduce el audio TTS para el texto dado.
+ * @param {string} rawText  - Texto del bot (puede contener [Tags])
+ * @param {function} onEnd  - Callback opcional cuando termina el audio
+ */
+async function playTTS(rawText, onEnd) {
+    const texto = cleanTextForTTS(rawText);
+    if (!texto) {
+        if (onEnd) onEnd();
+        return;
+    }
+
+    // Activar animación de habla en Unity
+    if (window.unityInstance) {
+        window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
+    }
+    botIsSpeaking = true;
+    updateMicVisuals(false, "Hablando...");
+
+    try {
+        const formData = new FormData();
+        formData.append('texto', texto);
+        formData.append('voz', 'nova');  // Voz por defecto (puedes cambiarla)
+        formData.append('instrucciones', 'Habla de forma natural, amigable y clara en español.');
+
+        const response = await fetch(`${API_URL}/tts`, {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error('TTS error:', response.status, errText);
+            finishTTS(onEnd);
+            return;
+        }
+
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+
+        // Liberar URL anterior si existe
+        if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
+
+        const audio = new Audio(audioUrl);
+        currentAudio = audio;
+        currentAudioUrl = audioUrl;
+
+        audio.addEventListener('ended', () => {
+            finishTTS(onEnd);
+        });
+
+        audio.addEventListener('error', (e) => {
+            console.error('Error reproduciendo audio TTS:', e);
+            finishTTS(onEnd);
+        });
+
+        await audio.play();
+
+    } catch (err) {
+        console.error('Error en playTTS:', err);
+        finishTTS(onEnd);
+    }
+}
+
+/**
+ * Finaliza la reproducción TTS y ejecuta callback.
+ */
+function finishTTS(onEnd) {
+    botIsSpeaking = false;
+    if (window.unityInstance) {
+        window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
+    }
+    if (!isConversationMode) {
+        updateMicVisuals(false, "Escuchando...");
+    }
+    currentAudio = null;
+    if (currentAudioUrl) {
+        URL.revokeObjectURL(currentAudioUrl);
+        currentAudioUrl = null;
+    }
+    if (onEnd) onEnd();
+}
+
+/**
+ * Detiene el audio TTS actual (si hay alguno reproduciéndose).
+ */
+function stopTTS() {
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        currentAudio = null;
+    }
+    if (currentAudioUrl) {
+        URL.revokeObjectURL(currentAudioUrl);
+        currentAudioUrl = null;
+    }
+    botIsSpeaking = false;
+}
