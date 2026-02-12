@@ -11,18 +11,22 @@ public class DebugManager : MonoBehaviour
 
 	private float tiempoAcumulado = 0f;
 	private int cuadrosContados = 0;
+	
+	[SerializeField] private GameObject DebugHUD;
 
 	void Awake()
 	{
 		// 1. Desactivamos VSync para tener control manual
-		QualitySettings.vSyncCount = 0;
-        
-		// 2. Limitamos a 60 FPS para optimizar rendimiento/batería
-		Application.targetFrameRate = 30;
+		QualitySettings.vSyncCount = 1;
 	}
 
 	void Update()
 	{
+		if (Input.GetKeyDown(KeyCode.Escape))
+		{
+			DebugHUD.SetActive(!DebugHUD.activeInHierarchy);
+		}
+		
 		// Lógica del contador de FPS
 		tiempoAcumulado += Time.unscaledDeltaTime;
 		cuadrosContados++;
@@ -34,11 +38,6 @@ public class DebugManager : MonoBehaviour
 			if (fpsText != null)
 			{
 				fpsText.text = $"FPS: {fps:F0}";
-
-				// Colores semáforo
-				if (fps >= 25) fpsText.color = Color.green;
-				else if (fps >= 15) fpsText.color = Color.yellow;
-				else fpsText.color = Color.red;
 			}
 
 			tiempoAcumulado = 0f;

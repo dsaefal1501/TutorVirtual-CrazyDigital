@@ -1,44 +1,84 @@
 ﻿using UnityEngine;
 using System.Collections;
+using TMPro;
 
 public class TutorController : MonoBehaviour
 {
 	private Animator anim;
+	private string lastText = "";
 
 	[Header("Configuración de Parpadeo")]
 	public float esperaMinima = 2f;
 	public float esperaMaxima = 5f;
-	public string nombreAnimacionBlink = "Blink"; // Nombre del ESTADO en el Animator
-	
-	[Header("Configuracion de Expresiones")]
+	public string nombreAnimacionBlink = "Blink"; 
+
+	[Header("Configuracion de Expresiones (Nombres de Estados en Animator)")]
 	public string HappyExpressionAnimation;
 	public string NeutralExpressionAnimation; 
 	public string AngryExpressionAnimation; 
 	public string ThinkingExpressionAnimation;
-	public string Happy, Neutral, Angry, Thinking, Explaining;
+	public string AleteoManosAnimation;
+	public string RascarBarbillaAnimation;
+    
+	[Header("Front Conection")]
+	public string ActualLine;
 
 	[Header("Configuración de Habla")]
-	public string paramHablar = "Talk"; // Nombre del BOOLEAN en el Animator
+	public string paramHablar = "Talk"; 
+	[SerializeField] private TMP_InputField expressionsField;
 
 	void Start()
 	{
 		anim = GetComponent<Animator>();
         
-		// Iniciamos el parpadeo automático
+		if (expressionsField == null)
+		{
+			Debug.LogError("Por favor, asigna el TMP_InputField en el Inspector.");
+		}
+
 		StartCoroutine(CicloAnimacionAleatoria());
 	}
 
-	// --- ESTA FUNCIÓN ES LLAMADA DESDE JAVASCRIPT ---
-	// Recibe 1 para activar (True) y 0 para desactivar (False)
+	protected void Update()
+	{
+		ExpressionManager();
+	}
+
 	public void SetTalkingState(int estado)
 	{
 		if (anim != null)
 		{
 			bool estaHablando = (estado == 1);
 			anim.SetBool(paramHablar, estaHablando);
-            
-			// Opcional: Debug para ver si llega la señal en consola de Unity
-			// Debug.Log($"Mensaje recibido desde Web. Hablando: {estaHablando}");
+		}
+	}
+    
+	public void SetActualLine(string line)
+	{
+        
+	}
+
+	public void ExpressionManager()
+	{
+		if (expressionsField == null) return;
+
+		if (expressionsField.text == lastText) return;
+		lastText = expressionsField.text;
+
+		var (estadoAActivar, capaObjetivo) = lastText switch
+		{
+			var t when t.Contains("[Happy]")            => (HappyExpressionAnimation, 3),
+			var t when t.Contains("[Neutral]")          => (NeutralExpressionAnimation, 3),
+			var t when t.Contains("[Angry]")            => (AngryExpressionAnimation, 3),
+			var t when t.Contains("[Thinking]")         => (ThinkingExpressionAnimation, 3),
+			var t when t.Contains("[RascarBarbilla]")   => (RascarBarbillaAnimation, 0),
+			var t when t.Contains("[AletearManos]")     => (AleteoManosAnimation, 0),
+			_                                           => (null, -1)
+		};
+
+		if (!string.IsNullOrEmpty(estadoAActivar) && capaObjetivo != -1 && anim.layerCount > capaObjetivo)
+		{
+			anim.CrossFade(estadoAActivar, 0.2f, capaObjetivo);
 		}
 	}
 
@@ -51,8 +91,6 @@ public class TutorController : MonoBehaviour
 
 			if (anim != null)
 			{
-				// Solo parpadeamos si el parámetro "Talk" NO está activado
-				// para evitar conflictos visuales extraños
 				if (!anim.GetBool(paramHablar))
 				{
 					anim.Play(nombreAnimacionBlink);
