@@ -35,3 +35,42 @@ class AnalisisArchivoResponse(BaseModel):
     mensaje: str
     modulos_creados: int
 
+
+# --- Schemas para Evaluaciones Dinámicas ---
+
+class AssessmentGenerate(BaseModel):
+    """Request para generar una evaluación dinámica."""
+    temario_id: int
+    num_preguntas: int = 5
+    temperatura: float = 0.7
+
+class AssessmentResponse(BaseModel):
+    """Response con la evaluación generada."""
+    assessment_id: Optional[int] = None
+    titulo: str = ""
+    total_preguntas: int = 0
+    preguntas: List[Dict[str, Any]] = []
+    error: Optional[str] = None
+
+class GradeOpenRequest(BaseModel):
+    """Request para corregir una respuesta abierta."""
+    assessment_id: int
+    pregunta_idx: int
+    respuesta_alumno: str
+    usuario_id: int
+
+class GradeMultipleRequest(BaseModel):
+    """Request para corregir respuestas de opción múltiple."""
+    assessment_id: int
+    respuestas: Dict[int, int]  # {pregunta_idx: indice_respuesta}
+    usuario_id: int
+
+class GradeResponse(BaseModel):
+    """Response con la calificación."""
+    score_id: Optional[int] = None
+    score: float = 0.0
+    feedback: str = ""
+    detalle: Optional[Any] = None
+    error: Optional[str] = None
+
+

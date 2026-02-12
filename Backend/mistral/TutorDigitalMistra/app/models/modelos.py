@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from sqlalchemy import ForeignKey, String, Integer, Boolean, DateTime, Float, Text, JSON
+from sqlalchemy import ForeignKey, String, Integer, Boolean, DateTime, Float, Text, JSON, Enum as SQLEnum, Numeric
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, backref
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector  # Necesitas instalar pgvector
@@ -83,7 +83,7 @@ class BaseConocimiento(Base):
     pagina: Mapped[Optional[int]] = mapped_column(Integer)
 
     # Vector RAG (existente)
-    embedding: Mapped[Optional[List[float]]] = mapped_column(Vector(1024)) 
+    embedding: Mapped[Optional[List[float]]] = mapped_column(Vector(1536))  # OpenAI text-embedding-3-small
     metadata_info: Mapped[dict] = mapped_column(JSON, name="metadatos")
 
     temario: Mapped["Temario"] = relationship(back_populates="base_conocimiento")
@@ -155,7 +155,7 @@ class MensajeChat(Base):
     sesion_id: Mapped[int] = mapped_column(ForeignKey("sesiones_chat.id"))
     rol: Mapped[str] = mapped_column(String(20)) # 'user', 'assistant', 'system'
     texto: Mapped[str] = mapped_column(Text)
-    embedding: Mapped[Optional[List[float]]] = mapped_column(Vector(1024))
+    embedding: Mapped[Optional[List[float]]] = mapped_column(Vector(1536))  # OpenAI text-embedding-3-small
     info_tecnica: Mapped[Optional[dict]] = mapped_column(JSON) # Tokens usados, modelo, etc.
     fecha: Mapped[datetime] = mapped_column(DateTime, server_default=func.now()) # Fecha en la que se envio el mensaje
 
@@ -167,8 +167,8 @@ class EmbeddingCache(Base):
     text_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     original_text: Mapped[str] = mapped_column(Text)
     
-    # Ajusta 1024 al modelo de Mistral
-    embedding: Mapped[list] = mapped_column(Vector(1024))
+    # OpenAI text-embedding-3-small = 1536 dimensiones
+    embedding: Mapped[list] = mapped_column(Vector(1536))
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
@@ -241,3 +241,67 @@ class EjercicioCodigo(Base):
 
     # Aquí NO hay error porque BaseConocimiento ya existe (estaba arriba)
     contenido_base: Mapped["BaseConocimiento"] = relationship("BaseConocimiento", back_populates="ejercicio")
+
+
+# --- Módulo: LMS Extendido (Matrículas, Evaluaciones IA, Telemetría) ---
+
+class Enrollment(Base):
+    """Relación M:N entre Usuarios y Temario (Matrículas)."""
+    __tablename__ = "enrollments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
+    temario_id: Mapped[int] = mapped_column(ForeignKey("temario.id"))
+    fecha_matricula: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    estado: Mapped[str] = mapped_column(String(20), default='activo')  # activo, suspendido, completado
+    progreso_global: Mapped[float] = mapped_column(Float, default=0.0)  # 0.0 a 100.0
+
+    usuario: Mapped["Usuario"] = relationship(backref="enrollments")
+    temario: Mapped["Temario"] = relationship(backref="enrollments")
+
+
+class Assessment(Base):
+    """Evaluaciones generadas dinámicamente por el pipeline RAG."""
+    __tablename__ = "assessments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    temario_id: Mapped[int] = mapped_column(ForeignKey("temario.id"))
+    titulo: Mapped[str] = mapped_column(String(255))
+    topic_metadata: Mapped[Optional[str]] = mapped_column(String(255))
+    total_preguntas: Mapped[int] = mapped_column(Integer, default=0)
+    generated_json_payload: Mapped[dict] = mapped_column(JSON)  # Preguntas en formato JSON
+    temperatura: Mapped[float] = mapped_column(Float, default=0.7)  # Temperatura usada en generación
+    fecha_creacion: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    temario: Mapped["Temario"] = relationship(backref="assessments")
+    scores: Mapped[List["TestScore"]] = relationship(back_populates="assessment")
+
+
+class TestScore(Base):
+    """Calificaciones históricas con feedback generado por LLM-as-a-Judge."""
+    __tablename__ = "test_scores"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    assessment_id: Mapped[int] = mapped_column(ForeignKey("assessments.id"))
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
+    score: Mapped[float] = mapped_column(Float, default=0.0)  # 0.0 a 100.0
+    respuestas_alumno: Mapped[Optional[dict]] = mapped_column(JSON)  # Respuestas en JSON
+    ai_feedback_log: Mapped[Optional[str]] = mapped_column(Text)  # Retroalimentación del LLM
+    tiempo_segundos: Mapped[Optional[int]] = mapped_column(Integer)  # Tiempo tomado
+    fecha_envio: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    assessment: Mapped["Assessment"] = relationship(back_populates="scores")
+    usuario: Mapped["Usuario"] = relationship(backref="test_scores")
+
+
+class LearningEvent(Base):
+    """Telemetría de eventos conductuales del alumno en la plataforma."""
+    __tablename__ = "learning_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
+    action_type: Mapped[str] = mapped_column(String(100))  # 'capitulo_visto', 'chat_iniciado', 'test_completado'
+    detalle: Mapped[Optional[str]] = mapped_column(Text)  # Info adicional del evento
+    timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    usuario: Mapped["Usuario"] = relationship(backref="learning_events")

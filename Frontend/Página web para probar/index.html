@@ -34,12 +34,43 @@
                     data-bs-target="#uploadModal">
                     <i class="bi bi-file-earmark-pdf me-1"></i> Subir Temario
                 </button>
+                <button class="btn btn-sm btn-outline-light rounded-pill px-3" data-bs-toggle="modal"
+                    data-bs-target="#contractsModal">
+                    <i class="bi bi-file-text me-1"></i> Ver Contratos
+                </button>
                 <button class="btn btn-sm btn-outline-light rounded-pill px-3" onclick="syncKnowledge()" id="syncBtn">
                     <i class="bi bi-arrow-repeat me-1"></i> Sincronizar
                 </button>
             </div>
         </div>
     </nav>
+
+    <!-- Contracts Modal -->
+    <div class="modal fade" id="contractsModal" tabindex="-1" aria-labelledby="contractsModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="contractsModalLabel">Consultar Contratos</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="contractsForm">
+                        <div class="mb-3">
+                            <label for="cupInput" class="form-label">CUP (Código Universal de Punto de
+                                Suministro)</label>
+                            <input type="text" class="form-control" id="cupInput" required value="ES5555555555555555T"
+                                placeholder="Ingrese el CUP">
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary" id="contractsBtn">
+                                <i class="bi bi-search me-2"></i>Buscar Contratos
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Upload Modal -->
     <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">

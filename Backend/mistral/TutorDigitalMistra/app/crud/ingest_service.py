@@ -1,6 +1,10 @@
+"""
+Servicio de Ingesta de Documentos — Versión con Chunking Token-Based
+Usa fragmentación de tamaño fijo (450 tokens, 70 overlap) en vez de IA para clasificar bloques.
+La IA solo se usa para analizar el índice/estructura del libro.
+"""
 import json
 import concurrent.futures
-import textwrap
 import os
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
@@ -11,18 +15,19 @@ from mistralai import Mistral
 
 # Importamos modelos y servicios
 from app.models.modelos import Temario, BaseConocimiento
-from app.crud import rag_service
+from app.crud.embedding_service import generar_embedding
+from app.crud.chunking_service import procesar_texto_tema
 
 api_key = os.getenv("MISTRAL_API_KEY")
 client = Mistral(api_key=api_key) if api_key else None
 
 # ============================================================================
-# 1. UTILIDADES DE EXTRACCIÓN (Limpio y sin limites)
+# 1. UTILIDADES DE EXTRACCIÓN PDF
 # ============================================================================
 
 def extraer_info_paginada(file: UploadFile) -> List[Dict[str, Any]]:
     """Lee el PDF y devuelve una lista de páginas limpia."""
-    file.file.seek(0) # Asegurar lectura desde el inicio
+    file.file.seek(0)
     content = file.file.read()
     reader = PdfReader(BytesIO(content))
     paginas = []
@@ -35,7 +40,7 @@ def extraer_info_paginada(file: UploadFile) -> List[Dict[str, Any]]:
         if texto:
             lines = [l for l in texto.split('\n') if not any(b in l for b in basura)]
             paginas.append({
-                "numero": i + 1, # Base 1
+                "numero": i + 1,
                 "text": "\n".join(lines)
             })
     return paginas
@@ -43,7 +48,6 @@ def extraer_info_paginada(file: UploadFile) -> List[Dict[str, Any]]:
 def obtener_texto_rango(paginas: List[Dict], inicio: int, fin: int) -> str:
     """Extrae texto de un rango de páginas."""
     texto_acumulado = ""
-    # Si el fin es 0 o menor, leemos hasta el final real del array
     limite_real = len(paginas) + 1 if fin <= 0 else fin
 
     for p in paginas:
@@ -58,7 +62,7 @@ def obtener_texto_rango(paginas: List[Dict], inicio: int, fin: int) -> str:
     return texto_acumulado
 
 # ============================================================================
-# 2. FASE 1: ARQUITECTO (Estructura Jerárquica ESTRICTA)
+# 2. FASE 1: ARQUITECTO (Estructura Jerárquica — usa IA solo para el índice)
 # ============================================================================
 
 def generar_estructura_temario(texto_indice: str) -> List[Dict]:
@@ -103,7 +107,6 @@ def generar_estructura_temario(texto_indice: str) -> List[Dict]:
         data = json.loads(response.choices[0].message.content)
         temas = data.get("temas", [])
         
-        # Ordenar por orden de lectura (global) para mantener secuencia
         temas.sort(key=lambda x: x.get("orden_lectura", x.get("orden", 0)))
         
         print(f"--- Estructura detectada: {len(temas)} temas ---")
@@ -113,48 +116,30 @@ def generar_estructura_temario(texto_indice: str) -> List[Dict]:
         return []
 
 def _guardar_temario_recursivo(db: Session, temas: List[Dict]) -> List[Dict]:
-    """Guarda en DB con ORDEN RELATIVO al padre.
-    
-    Ejemplo resultado:
-      Tema 1 (nivel 1, orden 1, parent=None)
-        Punto 1.1 (nivel 2, orden 1, parent=Tema1.id)
-        Punto 1.2 (nivel 2, orden 2, parent=Tema1.id)
-      Tema 2 (nivel 1, orden 2, parent=None)
-        Punto 2.1 (nivel 2, orden 1, parent=Tema2.id)
-    """
+    """Guarda en DB con ORDEN RELATIVO al padre."""
     lista_plana_db = []
-    
-    # Mapa: padres[nivel] = {"id": int, "nombre": str}
     padres = {}
-    
-    # Contadores de orden RELATIVO por parent_id
-    # orden_por_padre[None] = contador para temas nivel 1 (raíz)
-    # orden_por_padre[5] = contador para hijos del tema con id=5
     orden_por_padre = {}
 
     for t in temas:
         nivel_actual = t.get("nivel", 1)
         
-        # Determinar padre
         parent_id = padres.get(nivel_actual - 1, {}).get("id") if nivel_actual > 1 else None
         parent_nombre = padres.get(nivel_actual - 1, {}).get("nombre", "") if nivel_actual > 1 else ""
         
-        # Calcular orden RELATIVO al padre
         if parent_id not in orden_por_padre:
             orden_por_padre[parent_id] = 0
         orden_por_padre[parent_id] += 1
         orden_relativo = orden_por_padre[parent_id]
         
-        # --- DEBUG VISUAL ---
         indent = "  " * (nivel_actual - 1)
         parent_str = f"(Hijo de '{parent_nombre}' id={parent_id})" if parent_id else "(RAIZ)"
         print(f"{indent}Guardando: {t['nombre']} - Nivel {nivel_actual}, Orden {orden_relativo} {parent_str} - Pag {t.get('pagina_inicio')}")
-        # --------------------
 
         nuevo_tema = Temario(
             nombre=t["nombre"],
             nivel=nivel_actual,
-            orden=orden_relativo,  # ORDEN RELATIVO AL PADRE
+            orden=orden_relativo,
             parent_id=parent_id, 
             pagina_inicio=t.get("pagina_inicio", 0),
             descripcion=f"Tema de nivel {nivel_actual} importado",
@@ -164,75 +149,47 @@ def _guardar_temario_recursivo(db: Session, temas: List[Dict]) -> List[Dict]:
         db.commit()
         db.refresh(nuevo_tema)
         
-        # Actualizo como el último padre vigente de mi nivel
         padres[nivel_actual] = {"id": nuevo_tema.id, "nombre": t["nombre"]}
         
-        # Al cambiar de padre, resetear contadores de hijos
-        # (Ej: si paso del cap 1 al cap 2, los hijos del cap 2 empiezan en orden 1)
         if nivel_actual + 1 in padres:
             del padres[nivel_actual + 1]
-            # Limpiar contador de hijos del padre anterior de este nivel
-            old_parent = padres.get(nivel_actual - 1, {}).get("id") if nivel_actual > 1 else None
-            # No limpiar, el nuevo padre tendrá su propio contador
 
-        # Guardar en lista para el siguiente paso
         t_con_id = t.copy()
         t_con_id["db_id"] = nuevo_tema.id
         t_con_id["parent_id"] = parent_id
         t_con_id["parent_nombre"] = parent_nombre
-        t_con_id["orden"] = orden_relativo  # Sobreescribir con orden relativo
+        t_con_id["orden"] = orden_relativo
         lista_plana_db.append(t_con_id)
         
     return lista_plana_db
 
 # ============================================================================
-# 3. FASE 2: ATOMIZADOR DE CONTENIDO (Paralelo y Completo)
+# 3. FASE 2: CHUNKING TOKEN-BASED (Reemplaza la clasificación por IA)
 # ============================================================================
 
-def dividir_texto_largo(texto: str, max_chars: int = 12000) -> List[str]:
-    """Corta textos largos en trozos seguros para la IA."""
-    if len(texto) <= max_chars: return [texto]
-    return textwrap.wrap(texto, width=max_chars, break_long_words=False, replace_whitespace=False)
-
-def procesar_chunk_ia(texto: str) -> List[Dict]:
-    """Pregunta a la IA para clasificar texto/código."""
-    if len(texto.strip()) < 10: return []
-    
-    prompt = """
-    Analiza el texto del libro de programación.
-    Divídelo en bloques JSON:
-    - 'tipo': 'texto' (teoría) o 'codigo' (ejemplos python).
-    - 'contenido': El texto LITERAL exacto.
-    
-    JSON: {"bloques": [{"tipo": "texto", "contenido": "..."}]}
-    """
-    try:
-        resp = client.chat.complete(
-            model="mistral-large-latest",
-            messages=[{"role": "system", "content": prompt}, {"role": "user", "content": texto}],
-            response_format={"type": "json_object"}
-        )
-        return json.loads(resp.choices[0].message.content).get("bloques", [])
-    except: return []
-
 def tarea_procesar_tema(tema_info: Dict, texto_completo: str) -> Dict:
-    """Función worker que se ejecuta en paralelo."""
-    chunks = dividir_texto_largo(texto_completo)
-    bloques_totales = []
+    """
+    Worker que fragmenta el contenido usando chunking token-based.
+    Ya NO usa la IA para clasificar texto/código — usa heurísticas locales.
+    """
+    bloques = procesar_texto_tema(
+        texto=texto_completo,
+        nombre_tema=tema_info["nombre"],
+        nivel=tema_info["nivel"],
+        orden=tema_info["orden"],
+        pagina_inicio=tema_info.get("pagina_inicio", 0),
+        parent_nombre=tema_info.get("parent_nombre", ""),
+    )
     
-    for chunk in chunks:
-        bloques = procesar_chunk_ia(chunk)
-        bloques_totales.extend(bloques)
-        
     return {
         "tema_id": tema_info["db_id"],
         "nombre": tema_info["nombre"],
         "nivel": tema_info["nivel"],
-        "orden": tema_info["orden"],             # Orden relativo al padre
+        "orden": tema_info["orden"],
         "parent_id": tema_info.get("parent_id"),
         "parent_nombre": tema_info.get("parent_nombre", ""),
         "pag_inicio": tema_info.get("pagina_inicio", 0),
-        "bloques": bloques_totales,
+        "bloques": bloques,
         "error": None
     }
 
@@ -241,14 +198,13 @@ def tarea_procesar_tema(tema_info: Dict, texto_completo: str) -> Dict:
 # ============================================================================
 
 def procesar_archivo_temario(db: Session, file: UploadFile, account_id: str):
-    print("=== INICIO DE INGESTA MEJORADA ===")
+    print("=== INICIO DE INGESTA (Chunking Token-Based) ===")
     
-    # 1. Leer PDF (Todo el contenido)
+    # 1. Leer PDF
     paginas_pdf = extraer_info_paginada(file)
     print(f" -> PDF leído: {len(paginas_pdf)} páginas detectadas.")
     
-    # 2. Analizar Índice (Páginas 4 a 6 del libro 'Python para todos')
-    # Extraemos texto suficiente para pillar todo el índice
+    # 2. Analizar Índice (IA solo para estructura)
     texto_indice = obtener_texto_rango(paginas_pdf, 4, 7) 
     
     # 3. Generar Estructura (IA)
@@ -257,33 +213,30 @@ def procesar_archivo_temario(db: Session, file: UploadFile, account_id: str):
     if not temas_raw:
         return {"error": "La IA no pudo detectar el índice."}
 
-    # 4. Guardar Estructura en DB (Aquí se crean los padres e hijos)
+    # 4. Guardar Estructura en DB
     print(" -> Guardando jerarquía en base de datos...")
     temas_db = _guardar_temario_recursivo(db, temas_raw)
     
-    # 5. Procesamiento de Contenido (Paralelo)
-    print(f" -> Procesando contenido de {len(temas_db)} temas...")
+    # 5. Chunking Token-Based (Paralelo)
+    print(f" -> Fragmentando contenido de {len(temas_db)} temas (Token-Based, 450 tokens, 70 overlap)...")
     
-    # Preparar datos para los workers
-    temas_db.sort(key=lambda x: x.get("pagina_inicio", 0)) # Ordenar por pag
+    temas_db.sort(key=lambda x: x.get("pagina_inicio", 0))
     tareas = []
     
     for i, tema in enumerate(temas_db):
         p_inicio = tema.get("pagina_inicio", 1)
         
-        # Calcular fin: Inicio del siguiente tema o final del libro
         if i < len(temas_db) - 1:
             p_fin = temas_db[i+1].get("pagina_inicio", p_inicio)
         else:
             p_fin = len(paginas_pdf) + 1
             
-        # Corregir lógica si p_fin es igual a p_inicio (tema de 1 pag)
         if p_fin <= p_inicio: p_fin = p_inicio + 1
             
         texto = obtener_texto_rango(paginas_pdf, p_inicio, p_fin)
         tareas.append((tema, texto))
 
-    # Ejecutar
+    # Ejecutar chunking en paralelo
     resultados = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(tarea_procesar_tema, t, txt): t["db_id"] for t, txt in tareas}
@@ -291,53 +244,47 @@ def procesar_archivo_temario(db: Session, file: UploadFile, account_id: str):
             res = future.result()
             if not res["error"]:
                 resultados.append(res)
-                print(f"   [OK] {res['nombre']} ({len(res['bloques'])} bloques)")
+                print(f"   [OK] {res['nombre']} ({len(res['bloques'])} fragmentos)")
 
-    # 6. Guardar Bloques y Embeddings
-    print(" -> Insertando conocimientos y embeddings...")
+    # 6. Guardar Bloques y Generar Embeddings (OpenAI)
+    print(" -> Insertando fragmentos y generando embeddings (OpenAI text-embedding-3-small)...")
     count_bloques = 0
-    resultados.sort(key=lambda x: x["pag_inicio"]) # Guardar en orden
+    resultados.sort(key=lambda x: x["pag_inicio"])
     
     for res in resultados:
-        # Construir posición legible para Mistral
-        # Ej: "Tema 2, punto 3" o "Colecciones > Listas (nivel 2, orden 1)"
         if res.get("parent_nombre"):
             posicion = f"{res['parent_nombre']} > {res['nombre']} (nivel {res['nivel']}, orden {res['orden']})"
         else:
             posicion = f"{res['nombre']} (nivel {res['nivel']}, orden {res['orden']})"
         
-        # Metadatos COMPLETOS para que el RAG y Mistral sepan la jerarquía
-        meta = {
-            "titulo": res["nombre"],
-            "nivel": res["nivel"],
-            "orden": res["orden"],                # Orden relativo al padre
-            "parent_id": res.get("parent_id"),     # ID del tema padre
-            "parent_nombre": res.get("parent_nombre", ""),  # Nombre del padre
-            "posicion": posicion,                  # "Colecciones > Listas (nivel 2, orden 1)"
-            "origen": "ingesta_v2"
-        }
-        
-        for idx, b in enumerate(res["bloques"]):
-            tipo = b.get("tipo", "texto")
-            contenido = b.get("contenido", "")
+        for bloque in res["bloques"]:
+            contenido = bloque["contenido"]
+            tipo = bloque["tipo"]
+            orden_bloque = bloque["orden"]
             
-            # Embedding con contexto jerárquico
+            # Metadatos completos
+            meta = {
+                **bloque["metadata"],
+                "parent_id": res.get("parent_id"),
+            }
+            
+            # Embedding con contexto jerárquico (OpenAI)
             txt_vector = f"[{posicion}]: {contenido}"
-            vector = rag_service.generar_embedding(db, txt_vector)
+            vector = generar_embedding(db, txt_vector)
             
             nuevo_bk = BaseConocimiento(
                 temario_id=res["tema_id"],
                 contenido=contenido,
                 tipo_contenido=tipo,
-                orden_aparicion=idx + 1,
+                orden_aparicion=orden_bloque,
                 pagina=res["pag_inicio"],
                 ref_fuente=f"Pag {res['pag_inicio']}",
                 embedding=vector,
-                metadata_info=meta  # Incluye parent_id, parent_nombre, posicion
+                metadata_info=meta
             )
             db.add(nuevo_bk)
             count_bloques += 1
             
     db.commit()
-    print("=== PROCESO FINALIZADO ===")
-    return {"mensaje": "Ingesta completa con jerarquía", "bloques": count_bloques}
+    print(f"=== INGESTA FINALIZADA: {count_bloques} fragmentos indexados ===")
+    return {"mensaje": "Ingesta completa con chunking token-based", "bloques": count_bloques}

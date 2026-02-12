@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select, func, and_
 from app.models.modelos import BaseConocimiento, MensajeChat, SesionChat, Usuario, Temario, EmbeddingCache, ProgresoAlumno
 from app.schemas.schemas import PreguntaUsuario, RespuestaTutor, ConocimientoCreate
+from app.crud.embedding_service import generar_embedding  # OpenAI embeddings
 import os
-import hashlib
 import time
 import threading
 import functools
@@ -116,29 +116,10 @@ def retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0):
     return decorator
 
 # ============================================================================
-# 2. LOGICA DE EMBEDDINGS (Core)
+# 2. EMBEDDINGS — Delegados a embedding_service.py
 # ============================================================================
-
-@retry_with_backoff()
-def _generate_embedding_api(texto: str):
-    if not client: return [0.0] * 1024
-    rate_limiter.wait_if_needed("embed")
-    resp = client.embeddings.create(model="mistral-embed", inputs=[texto])
-    return resp.data[0].embedding
-
-def generar_embedding(db: Session, texto: str):
-    """Genera embedding revisando caché primero."""
-    text_hash = hashlib.sha256(texto.encode('utf-8')).hexdigest()
-    cached = db.query(EmbeddingCache).filter(EmbeddingCache.text_hash == text_hash).first()
-    if cached: return cached.embedding
-    
-    vector = _generate_embedding_api(texto)
-    
-    try:
-        db.add(EmbeddingCache(text_hash=text_hash, original_text=texto, embedding=vector))
-        db.commit()
-    except: pass
-    return vector
+# La función generar_embedding() se importa desde app.crud.embedding_service
+# Usa OpenAI text-embedding-3-small (1536 dims) con caché en PostgreSQL
 
 # ============================================================================
 # 3. UTILIDADES DE CONTEXTO JERÁRQUICO

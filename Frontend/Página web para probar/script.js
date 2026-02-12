@@ -1,4 +1,4 @@
-const API_URL = 'http://192.168.18.6:8000';
+const API_URL = 'http://localhost:8000';
 
 // DOM Elements
 const chatForm = document.getElementById('chatForm');
@@ -48,6 +48,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Upload Form Handler
     document.getElementById('uploadForm').addEventListener('submit', handleUpload);
+
+    // Contracts Form Handler
+    const contractsForm = document.getElementById('contractsForm');
+    if (contractsForm) {
+        contractsForm.addEventListener('submit', handleContractSearch);
+    }
 });
 
 async function checkConnection() {
@@ -96,7 +102,7 @@ async function handleSubmit() {
 
     try {
         const isStream = streamToggle.checked;
-        const endpoint = isStream ? '/ask/stream' : '/ask';
+        const endpoint = '/chat';
 
         const response = await fetch(`${API_URL}${endpoint}`, {
             method: 'POST',
@@ -378,6 +384,92 @@ async function handleUpload(e) {
         if (uploadBtn) {
             uploadBtn.disabled = false;
             uploadBtn.innerHTML = originalBtnText;
+        }
+    }
+}
+
+
+async function handleContractSearch(e) {
+    if (e) e.preventDefault();
+
+    const cupInput = document.getElementById('cupInput');
+    const cup = cupInput ? cupInput.value.trim() : '';
+    const btn = document.getElementById('contractsBtn');
+    const originalText = btn ? btn.innerHTML : 'Buscar';
+
+    if (!cup) {
+        showNotification('Por favor ingrese un CUP', true);
+        return;
+    }
+
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Buscando...';
+        }
+
+        // Endpoint: /contratos?cup=...
+        const response = await fetch(`${API_URL}/contratos?cup=${encodeURIComponent(cup)}`);
+
+        // Handle non-JSON response gracefully
+        const responseText = await response.text();
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (e) {
+            throw new Error(response.ok ? 'Respuesta inesperada del servidor' : `Error ${response.status}: ${response.statusText}`);
+        }
+
+        if (!response.ok) {
+            throw new Error(data.detail || data.message || `Error ${response.status}`);
+        }
+
+        // Close modal
+        const modalEl = document.getElementById('contractsModal');
+        let modal = bootstrap.Modal.getInstance(modalEl);
+        if (!modal) modal = new bootstrap.Modal(modalEl);
+        modal.hide();
+
+        // Clean backdrop
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style = '';
+
+        // Format and display result in chat
+        let message = `📄 **Contratos encontrados para CUP: ${cup}**\n\n`;
+
+        if (Array.isArray(data) && data.length > 0) {
+            data.forEach((contract, index) => {
+                message += `**Contrato #${index + 1}**\n`;
+                for (const [key, value] of Object.entries(contract)) {
+                    message += `- **${key}:** ${value}\n`;
+                }
+                message += `\n---\n`;
+            });
+        } else if (typeof data === 'object' && data !== null) {
+            for (const [key, value] of Object.entries(data)) {
+                if (typeof value === 'object') {
+                    message += `- **${key}:**\n`;
+                    message += JSON.stringify(value, null, 2);
+                } else {
+                    message += `- **${key}:** ${value}\n`;
+                }
+            }
+        } else {
+            message += "No se encontraron contratos o el formato es desconocido.";
+        }
+
+        addMessage(message, 'bot');
+        showNotification('Búsqueda completada');
+
+    } catch (error) {
+        console.error('Contract search error:', error);
+        showNotification(`Error: ${error.message}`, true);
+        addMessage(`❌ **Error al buscar contratos**\n${error.message}`, 'bot');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
         }
     }
 }
