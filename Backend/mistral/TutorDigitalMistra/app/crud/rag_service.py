@@ -95,7 +95,7 @@ SEGURIDAD
 # ============================================================================
 
 class RateLimiter:
-    def __init__(self, max_requests: int = 10, time_window: float = 60.0):
+    def __init__(self, max_requests: int = 20, time_window: float = 60.0):
         self.max_requests = max_requests
         self.time_window = time_window
         self.requests = defaultdict(list)
