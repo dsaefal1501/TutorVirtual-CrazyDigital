@@ -54,13 +54,14 @@ let recognition = null;
 let botIsSpeaking = false; 
 let isProcessing = false;
 
-// --- CONFIGURACIÓN DE SUBTÍTULOS ---
-let botWordQueue = []; 
+// --- CONFIGURACIÓN DE SUBTÍTULOS Y EMOCIONES ---
+let botWordQueue = []; // Ahora guardará objetos {type: 'tag'|'word', value: '...'}
 let isShowingSubtitle = false;
 let streamBuffer = ""; 
 const TIME_PER_WORD_MS = 320; 
 const MIN_TIME_ON_SCREEN_MS = 1500;
-const SUBTITLE_BATCH_SIZE = 7; // Mínimo de palabras antes de mostrar
+const SUBTITLE_BATCH_SIZE = 7; 
+const TAG_REGEX = /(\[.*?\])/g; // Regex para capturar [Etiquetas]
 
 // Configuración de Reconocimiento de Voz
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -219,7 +220,9 @@ async function handleSendMessage(text) {
     try {
         await processBackendResponse(text, (chunk) => {
             fullLogText += chunk;
-            // MODIFICADO: Se eliminó el .slice(16). Ahora pasa todo el texto.
+            // Mostramos todo el texto en el chat (incluyendo etiquetas si quieres depurar, 
+            // o podrías limpiarlas visualmente aquí también si prefieres).
+            // De momento lo dejamos raw para que veas qué llega.
             updateBotMessage(typingId, fullLogText);
         });
     } catch (error) {
@@ -250,7 +253,6 @@ async function handleConversationTurn(text) {
     try {
         await processBackendResponse(text, (chunk) => {
             fullLogText += chunk;
-            // MODIFICADO: Se eliminó el .slice(16). Ahora pasa todo el texto.
             updateBotMessage(typingId, fullLogText);
         });
     } catch (error) {
@@ -301,7 +303,6 @@ async function processBackendResponse(text, onChunkReceived) {
             
             const chunk = decoder.decode(value, { stream: true });
             
-            // MODIFICADO: Eliminada la lógica que contaba hasta 16 caracteres.
             if (chunk) queueBotWords(chunk);
             onChunkReceived(chunk);
         }
@@ -309,7 +310,6 @@ async function processBackendResponse(text, onChunkReceived) {
         const data = await response.json();
         const result = data.respuesta || data.mensaje || JSON.stringify(data);
         
-        // MODIFICADO: Se pasa el resultado completo sin slice(16).
         if (result.length > 0) queueBotWords(result);
         onChunkReceived(result);
     }
@@ -325,31 +325,55 @@ function updateUserSubtitle(text) {
     subtitleText.innerText = lastWords.join(" ");
 }
 
-// --- LÓGICA DE SUBTÍTULOS SINCRONIZADA CON ANIMACIÓN ---
+// --- LÓGICA DE SUBTÍTULOS INTELIGENTE (Detecta [Tag] vs Texto) ---
 
 function queueBotWords(chunkText) {
     if (!chunkText) return;
     
     streamBuffer += chunkText;
-    const lastSpaceIndex = streamBuffer.lastIndexOf(" ");
     
-    if (lastSpaceIndex !== -1) {
-        const completeWordsPart = streamBuffer.substring(0, lastSpaceIndex);
-        streamBuffer = streamBuffer.substring(lastSpaceIndex); 
+    // Buscamos un punto seguro para cortar (último cierre de corchete o espacio)
+    // para no dejar una etiqueta o palabra a medias.
+    const lastTagClose = streamBuffer.lastIndexOf("]");
+    const lastSpace = streamBuffer.lastIndexOf(" ");
+    const safeIndex = Math.max(lastTagClose, lastSpace);
+
+    if (safeIndex !== -1) {
+        const completePart = streamBuffer.substring(0, safeIndex + 1);
+        streamBuffer = streamBuffer.substring(safeIndex + 1);
         
-        const words = completeWordsPart.split(/\s+/).filter(w => w.length > 0);
-        botWordQueue.push(...words);
+        // Magia: Separamos las etiquetas del texto usando Regex
+        const parts = completePart.split(TAG_REGEX);
+
+        parts.forEach(part => {
+            if (TAG_REGEX.test(part)) {
+                // Es una etiqueta: [Happy]
+                botWordQueue.push({ type: 'tag', value: part });
+            } else if (part.trim().length > 0) {
+                // Es texto normal: separamos en palabras
+                const words = part.split(/\s+/).filter(w => w.length > 0);
+                words.forEach(w => botWordQueue.push({ type: 'word', value: w }));
+            }
+        });
     }
 
-    if (!isShowingSubtitle && botWordQueue.length >= SUBTITLE_BATCH_SIZE) {
+    if (!isShowingSubtitle && botWordQueue.length > 0) {
         processBotSubtitleQueue();
     }
 }
 
 function flushStreamBuffer() {
+    // Procesamos lo que quede en el buffer final
     if (streamBuffer.trim().length > 0) {
-        const words = streamBuffer.trim().split(/\s+/).filter(w => w.length > 0);
-        botWordQueue.push(...words);
+         const parts = streamBuffer.split(TAG_REGEX);
+         parts.forEach(part => {
+            if (TAG_REGEX.test(part)) {
+                botWordQueue.push({ type: 'tag', value: part });
+            } else if (part.trim().length > 0) {
+                const words = part.split(/\s+/).filter(w => w.length > 0);
+                words.forEach(w => botWordQueue.push({ type: 'word', value: w }));
+            }
+        });
         streamBuffer = "";
     }
     if (!isShowingSubtitle && botWordQueue.length > 0) {
@@ -358,30 +382,56 @@ function flushStreamBuffer() {
 }
 
 function processBotSubtitleQueue() {
-    // Si no quedan palabras, paramos subtítulos Y animación
     if (botWordQueue.length === 0) {
         isShowingSubtitle = false;
         subtitleText.innerText = "";
         
-        // --- AQUÍ DETENEMOS AL PERSONAJE ---
+        // Paramos animación de habla
         if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
-        
         return;
     }
 
     isShowingSubtitle = true;
     
-    // --- AQUÍ INICIAMOS AL PERSONAJE (Solo si hay texto para mostrar) ---
-    if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
-    
-    // Tomamos hasta 7 palabras
-    const chunk = botWordQueue.splice(0, SUBTITLE_BATCH_SIZE); 
-    const textToShow = chunk.join(" ");
+    const currentItem = botWordQueue[0];
 
+    // --- CASO 1: ETIQUETA DE EMOCIÓN ---
+    if (currentItem.type === 'tag') {
+        botWordQueue.shift(); // Consumimos la etiqueta
+        
+        // Enviamos la emoción a Unity (El usuario NO la ve en subtítulos)
+        if(window.unityInstance) {
+             // Eliminamos corchetes para enviarlo limpio si quieres, o tal cual.
+             // Tu script de C# ya limpia espacios, pero enviamos tal cual: "[Happy]"
+             window.unityInstance.SendMessage('Tutor', 'SetExpression', currentItem.value);
+        }
+
+        // Recursión INMEDIATA (sin espera) para procesar lo siguiente
+        processBotSubtitleQueue(); 
+        return;
+    }
+
+    // --- CASO 2: PALABRA (Texto visible) ---
+    
+    // Animación de habla ON
+    if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
+
+    // Cogemos un lote de palabras
+    let batch = [];
+    let i = 0;
+    
+    // Llenamos el batch, pero paramos si nos topamos con una etiqueta
+    while(i < SUBTITLE_BATCH_SIZE && botWordQueue.length > 0 && botWordQueue[0].type === 'word') {
+        batch.push(botWordQueue.shift().value);
+        i++;
+    }
+
+    const textToShow = batch.join(" ");
     subtitleText.className = "subtitle-text subtitle-bot";
     subtitleText.innerText = textToShow;
 
-    const duration = Math.max(MIN_TIME_ON_SCREEN_MS, chunk.length * TIME_PER_WORD_MS);
+    // Calculamos duración de lectura
+    const duration = Math.max(MIN_TIME_ON_SCREEN_MS, batch.length * TIME_PER_WORD_MS);
 
     setTimeout(() => {
         processBotSubtitleQueue();
@@ -393,7 +443,6 @@ function clearBotSubtitles() {
     isShowingSubtitle = false;
     streamBuffer = "";
     subtitleText.innerText = "";
-    // Seguridad: Si limpiamos subtítulos, callamos al personaje
     if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
 }
 

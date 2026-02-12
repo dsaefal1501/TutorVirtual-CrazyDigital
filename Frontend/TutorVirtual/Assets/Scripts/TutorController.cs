@@ -1,49 +1,33 @@
 ﻿using UnityEngine;
 using System.Collections;
-using TMPro;
 
 public class TutorController : MonoBehaviour
 {
 	private Animator anim;
-	private string lastText = "";
 
 	[Header("Configuración de Parpadeo")]
 	public float esperaMinima = 2f;
 	public float esperaMaxima = 5f;
 	public string nombreAnimacionBlink = "Blink"; 
 
-	[Header("Configuracion de Expresiones (Nombres de Estados en Animator)")]
-	public string HappyExpressionAnimation;
-	public string NeutralExpressionAnimation; 
-	public string AngryExpressionAnimation; 
-	public string ThinkingExpressionAnimation;
-	public string AleteoManosAnimation;
-	public string RascarBarbillaAnimation;
-    
-	[Header("Front Conection")]
-	public string ActualLine;
+	[Header("Nombres de Estados en Animator")]
+	public string HappyExpressionAnimation = "Happy";
+	public string NeutralExpressionAnimation = "Neutral"; 
+	public string ThinkingExpressionAnimation = "Thinking";
+	public string ExplainingExpressionAnimation = "Talking"; // Para [Explaining]
+	public string SurprisedExpressionAnimation = "Surprised";
+	public string EncouragingExpressionAnimation = "Encouraging";
 
 	[Header("Configuración de Habla")]
 	public string paramHablar = "Talk"; 
-	[SerializeField] private TMP_InputField expressionsField;
 
 	void Start()
 	{
 		anim = GetComponent<Animator>();
-        
-		if (expressionsField == null)
-		{
-			Debug.LogError("Por favor, asigna el TMP_InputField en el Inspector.");
-		}
-
 		StartCoroutine(CicloAnimacionAleatoria());
 	}
 
-	protected void Update()
-	{
-		ExpressionManager();
-	}
-
+	// JS llamará a esto: window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
 	public void SetTalkingState(int estado)
 	{
 		if (anim != null)
@@ -52,33 +36,36 @@ public class TutorController : MonoBehaviour
 			anim.SetBool(paramHablar, estaHablando);
 		}
 	}
-    
-	public void SetActualLine(string line)
+
+	// JS llamará a esto: window.unityInstance.SendMessage('Tutor', 'SetExpression', '[Happy]');
+	public void SetExpression(string tag)
 	{
-        
-	}
+		if (anim == null) return;
 
-	public void ExpressionManager()
-	{
-		if (expressionsField == null) return;
+		// Limpiamos la etiqueta por si acaso llega con espacios
+		tag = tag.Trim();
 
-		if (expressionsField.text == lastText) return;
-		lastText = expressionsField.text;
+		string estadoAActivar = null;
+		int capaObjetivo = 3; // Asumo que tus expresiones faciales están en la capa 3 (Overrides)
 
-		var (estadoAActivar, capaObjetivo) = lastText switch
+		// Switch moderno de C#
+		estadoAActivar = tag switch
 		{
-			var t when t.Contains("[Happy]")            => (HappyExpressionAnimation, 3),
-			var t when t.Contains("[Neutral]")          => (NeutralExpressionAnimation, 3),
-			var t when t.Contains("[Angry]")            => (AngryExpressionAnimation, 3),
-			var t when t.Contains("[Thinking]")         => (ThinkingExpressionAnimation, 3),
-			var t when t.Contains("[RascarBarbilla]")   => (RascarBarbillaAnimation, 0),
-			var t when t.Contains("[AletearManos]")     => (AleteoManosAnimation, 0),
-			_                                           => (null, -1)
+			"[Happy]"       => HappyExpressionAnimation,
+			"[SuperHappy]"  => HappyExpressionAnimation, // Reusamos si no tienes una Super
+			"[Neutral]"     => NeutralExpressionAnimation,
+			"[Thinking]"    => ThinkingExpressionAnimation,
+			"[Explaining]"  => ExplainingExpressionAnimation,
+			"[Surprised]"   => SurprisedExpressionAnimation,
+			"[Encouraging]" => EncouragingExpressionAnimation,
+			_               => null
 		};
 
-		if (!string.IsNullOrEmpty(estadoAActivar) && capaObjetivo != -1 && anim.layerCount > capaObjetivo)
+		if (!string.IsNullOrEmpty(estadoAActivar))
 		{
-			anim.CrossFade(estadoAActivar, 0.2f, capaObjetivo);
+			// Usamos CrossFade para que la transición entre muecas sea suave (0.2 segundos)
+			anim.CrossFade(estadoAActivar, 0.25f, capaObjetivo);
+			Debug.Log($"Cambio de expresión a: {estadoAActivar}");
 		}
 	}
 
@@ -86,15 +73,18 @@ public class TutorController : MonoBehaviour
 	{
 		while (true)
 		{
+			// Esperamos un tiempo aleatorio entre parpadeos
 			float tiempoEspera = Random.Range(esperaMinima, esperaMaxima);
 			yield return new WaitForSeconds(tiempoEspera);
 
 			if (anim != null)
 			{
-				if (!anim.GetBool(paramHablar))
-				{
-					anim.Play(nombreAnimacionBlink);
-				}
+				// ELIMINADO: if (!anim.GetBool(paramHablar))
+            
+				// Forzamos el parpadeo sin importar si habla o no.
+				// El "-1" indica que use la capa por defecto (o la configurada en el animator)
+				// El "0f" reinicia la animación desde el principio.
+				anim.Play(nombreAnimacionBlink, -1, 0f);
 			}
 		}
 	}
