@@ -1,0 +1,30 @@
+uri.-destino: https://desar-mlhx29ed-eastus2.cognitiveservices.azure.com/openai/deployments/gpt-4o-mini-tts/audio/speech?api-version=2025-03-01-preview
+
+azure gpt-mini-tts: AOAA7J58Ao2Ydf8DcKMUnkbu99HFEOes74S4aPEvxcp50JOlXTxoJQQJ99CBACHYHv6XJ3w3AAAAACOGi4PN
+
+1. Autenticación mediante la clave de API
+En el caso de los puntos de conexión de API sin servidor, implemente el modelo para generar la dirección URL del punto de conexión y una clave de API para autenticarse en el servicio. En esta muestra, el punto de conexión y la clave son cadenas que contienen la dirección URL del punto de conexión y la clave de API. La dirección URL del punto de conexión de API y la clave de API se pueden encontrar en la página Implementaciones y punto de conexión una vez implementado el modelo.
+
+Si usa Bash:
+
+export AZURE_API_KEY="<your-api-key>"
+
+Si está en PowerShell:
+
+$Env:AZURE_API_KEY = "<your-api-key>"
+
+Si usa el símbolo del sistema de Windows:
+
+set AZURE_API_KEY = <your-api-key>
+
+2. Ejecutar un ejemplo de código básico
+Pegue lo siguiente en un shell
+
+curl -X POST "https://desar-mlhx29ed-eastus2.cognitiveservices.azure.com/openai/deployments/gpt-4o-mini-tts/audio/speech?api-version=2025-03-01-preview" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $AZURE_API_KEY" \
+  -d '{
+      "model": "gpt-4o-mini-tts",
+      "input": "The quick brown fox jumped over the lazy dog",
+      "voice": "alloy"
+    }'

@@ -54,12 +54,13 @@ let recognition = null;
 let botIsSpeaking = false; 
 let isProcessing = false;
 
-// Variables para subtítulos
+// --- CONFIGURACIÓN DE SUBTÍTULOS ---
 let botWordQueue = []; 
 let isShowingSubtitle = false;
 let streamBuffer = ""; 
 const TIME_PER_WORD_MS = 320; 
 const MIN_TIME_ON_SCREEN_MS = 1500;
+const SUBTITLE_BATCH_SIZE = 7; // Mínimo de palabras antes de mostrar
 
 // Configuración de Reconocimiento de Voz
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -162,14 +163,11 @@ function toggleChat() {
     }
 }
 
-// Busca esta función en tu script.js y reemplázala por esta versión:
 function startConversationMode() {
     isConversationMode = true;
     try { 
         recognition.start(); 
     } catch(e) {
-        // Si ya estaba escuchando, el error 'invalid state' es normal, lo ignoramos.
-        // Pero si es otro error, lo mostramos en consola.
         if (e.name !== 'InvalidStateError') {
             console.error("Error al iniciar el micro:", e);
             alert("No se pudo iniciar el micrófono: " + e.message);
@@ -216,7 +214,8 @@ async function handleSendMessage(text) {
     clearBotSubtitles();
     addMessage(text, 'user');
     const typingId = showTyping();
-    if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
+    
+    // NOTA: Eliminado SetTalkingState(1) aquí. El bot esperará a tener subtítulos.
 
     let fullLogText = ""; 
     try {
@@ -231,10 +230,11 @@ async function handleSendMessage(text) {
     } finally {
         isProcessing = false;
         sendBtn.disabled = false;
-        flushStreamBuffer(); 
+        flushStreamBuffer();
         const checkFinishInterval = setInterval(() => {
+            // El SetTalkingState(0) ahora lo maneja processBotSubtitleQueue,
+            // aquí solo vigilamos para reiniciar lógica de UI.
             if (botWordQueue.length === 0 && !isShowingSubtitle) {
-                if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
                 clearInterval(checkFinishInterval);
             }
         }, 500);
@@ -249,7 +249,8 @@ async function handleConversationTurn(text) {
     clearBotSubtitles();
     addMessage(text, 'user');
     const typingId = showTyping();
-    if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
+    
+    // NOTA: Eliminado SetTalkingState(1) aquí.
 
     let fullLogText = ""; 
     try {
@@ -268,9 +269,11 @@ async function handleConversationTurn(text) {
 
     const checkFinishInterval = setInterval(() => {
         if (botWordQueue.length === 0 && !isShowingSubtitle) {
-            if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
             clearInterval(checkFinishInterval);
             subtitleText.innerText = ""; 
+
+            // Aseguramos que se calle si quedó algo pendiente (doble check)
+            if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
 
             if (isConversationMode) {
                 botIsSpeaking = false;
@@ -336,6 +339,8 @@ function updateUserSubtitle(text) {
     subtitleText.innerText = lastWords.join(" ");
 }
 
+// --- LÓGICA DE SUBTÍTULOS SINCRONIZADA CON ANIMACIÓN ---
+
 function queueBotWords(chunkText) {
     if (!chunkText) return;
     
@@ -350,7 +355,9 @@ function queueBotWords(chunkText) {
         botWordQueue.push(...words);
     }
 
-    processBotSubtitleQueue();
+    if (!isShowingSubtitle && botWordQueue.length >= SUBTITLE_BATCH_SIZE) {
+        processBotSubtitleQueue();
+    }
 }
 
 function flushStreamBuffer() {
@@ -359,14 +366,30 @@ function flushStreamBuffer() {
         botWordQueue.push(...words);
         streamBuffer = "";
     }
-    processBotSubtitleQueue();
+    if (!isShowingSubtitle && botWordQueue.length > 0) {
+        processBotSubtitleQueue();
+    }
 }
 
 function processBotSubtitleQueue() {
-    if (isShowingSubtitle || botWordQueue.length === 0) return;
+    // Si no quedan palabras, paramos subtítulos Y animación
+    if (botWordQueue.length === 0) {
+        isShowingSubtitle = false;
+        subtitleText.innerText = "";
+        
+        // --- AQUÍ DETENEMOS AL PERSONAJE ---
+        if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
+        
+        return;
+    }
 
     isShowingSubtitle = true;
-    const chunk = botWordQueue.splice(0, 7); 
+    
+    // --- AQUÍ INICIAMOS AL PERSONAJE (Solo si hay texto para mostrar) ---
+    if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
+    
+    // Tomamos hasta 7 palabras
+    const chunk = botWordQueue.splice(0, SUBTITLE_BATCH_SIZE); 
     const textToShow = chunk.join(" ");
 
     subtitleText.className = "subtitle-text subtitle-bot";
@@ -375,13 +398,7 @@ function processBotSubtitleQueue() {
     const duration = Math.max(MIN_TIME_ON_SCREEN_MS, chunk.length * TIME_PER_WORD_MS);
 
     setTimeout(() => {
-        if (botWordQueue.length === 0) {
-            subtitleText.innerText = "";
-            isShowingSubtitle = false;
-        } else {
-            isShowingSubtitle = false;
-            processBotSubtitleQueue();
-        }
+        processBotSubtitleQueue();
     }, duration);
 }
 
@@ -390,6 +407,8 @@ function clearBotSubtitles() {
     isShowingSubtitle = false;
     streamBuffer = "";
     subtitleText.innerText = "";
+    // Seguridad: Si limpiamos subtítulos, callamos al personaje
+    if(window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
 }
 
 function addMessage(text, role) {
