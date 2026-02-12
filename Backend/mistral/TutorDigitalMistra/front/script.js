@@ -552,7 +552,7 @@ async function playTTS(rawText, onEnd) {
     try {
         const formData = new FormData();
         formData.append('texto', texto);
-        formData.append('voz', 'nova');  // Voz por defecto (puedes cambiarla)
+        formData.append('voz', 'onyx');
         formData.append('instrucciones', 'Habla de forma natural, amigable y clara en español.');
 
         const response = await fetch(`${API_URL}/tts`, {

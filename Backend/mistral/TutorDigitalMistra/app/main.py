@@ -186,13 +186,15 @@ def grade_multiple_choice(req: GradeMultipleRequest, db: Session = Depends(get_d
 @app.post("/tts")
 def text_to_speech(
     texto: str = Form(..., description="Texto a convertir en audio"),
-    voz: str = Form("onyx", description="Voz: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer"),
+    voz: str = Form("onyx", description="Voz: onyx"),
     instrucciones: str = Form(None, description="Instrucciones opcionales de estilo de voz"),
 ):
     """
     Convierte texto a audio usando Azure gpt-4o-mini-tts.
     Devuelve un archivo de audio MP3.
     """
+    print(f"[TTS] Recibido: texto='{texto[:50]}...', voz={voz}")
+    
     if not texto or not texto.strip():
         raise HTTPException(status_code=400, detail="El texto no puede estar vacío")
     

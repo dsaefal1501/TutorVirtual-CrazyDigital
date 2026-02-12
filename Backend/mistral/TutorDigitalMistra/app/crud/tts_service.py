@@ -64,11 +64,14 @@ def generar_audio_tts(
     
     headers = {
         "Content-Type": "application/json",
-        "api-key": AZURE_TTS_API_KEY,
+        "Authorization": f"Bearer {AZURE_TTS_API_KEY}",
     }
     
     # Llamada a la API (sincrónica con httpx)
     with httpx.Client(timeout=30.0) as client:
         response = client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
+        if response.status_code != 200:
+            print(f"[TTS ERROR] Status: {response.status_code}")
+            print(f"[TTS ERROR] Body: {response.text}")
+            response.raise_for_status()
         return response.content
