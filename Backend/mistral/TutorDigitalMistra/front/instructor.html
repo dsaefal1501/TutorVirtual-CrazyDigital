@@ -59,9 +59,10 @@
             height: 100%;
             background: linear-gradient(160deg, var(--bg-start) 0%, var(--bg-end) 100%);
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
-            overflow: hidden;
+            overflow-y: auto;
+            padding: 30px 0;
         }
 
         .ambient-shape {
@@ -117,8 +118,8 @@
         .dashboard {
             position: relative;
             z-index: 10;
-            width: 92%;
-            max-width: 520px;
+            width: 94%;
+            max-width: 920px;
             display: flex;
             flex-direction: column;
             gap: 18px;
@@ -534,6 +535,290 @@
                 padding: 24px 16px;
             }
         }
+
+        /* ---- Syllabus Two-Column Layout ---- */
+        .syllabus-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            border-bottom: 1.5px solid rgba(200, 220, 240, 0.3);
+        }
+
+        .syllabus-header-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .syllabus-header-title i {
+            font-size: 1.2rem;
+            color: var(--sky-600);
+        }
+
+        /* Dropdown */
+        .dropdown-wrapper {
+            position: relative;
+        }
+
+        .dropdown-trigger {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border: 1.5px solid rgba(111, 181, 240, 0.35);
+            border-radius: 50px;
+            background: rgba(255, 255, 255, 0.6);
+            color: var(--sky-600);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s;
+        }
+
+        .dropdown-trigger:hover {
+            background: rgba(111, 181, 240, 0.12);
+            border-color: var(--sky-400);
+        }
+
+        .dropdown-menu-custom {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(16px);
+            border: 1.5px solid rgba(200, 220, 240, 0.5);
+            border-radius: 16px;
+            padding: 8px;
+            min-width: 180px;
+            box-shadow: 0 10px 30px rgba(60, 120, 190, 0.2);
+            z-index: 100;
+            display: none;
+            animation: fadeInContent 0.2s ease;
+        }
+
+        .dropdown-menu-custom.open {
+            display: block;
+        }
+
+        .dropdown-item-custom {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border: none;
+            background: none;
+            width: 100%;
+            font-size: 0.88rem;
+            font-weight: 500;
+            color: var(--text-main);
+            border-radius: 10px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: background 0.15s;
+        }
+
+        .dropdown-item-custom:hover {
+            background: rgba(111, 181, 240, 0.1);
+        }
+
+        .dropdown-item-custom.danger {
+            color: #e74c3c;
+        }
+
+        .dropdown-item-custom.danger:hover {
+            background: rgba(231, 76, 60, 0.08);
+        }
+
+        .dropdown-item-custom i {
+            font-size: 1rem;
+            min-width: 18px;
+        }
+
+        /* Two column layout */
+        .syllabus-layout {
+            display: flex;
+            gap: 0;
+            min-height: 420px;
+        }
+
+        .syllabus-sidebar {
+            flex: 0 0 38%;
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 16px;
+            border-right: 1.5px solid rgba(200, 220, 240, 0.25);
+            background: rgba(180, 210, 240, 0.15);
+        }
+
+        .syllabus-sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .syllabus-sidebar::-webkit-scrollbar-thumb {
+            background: rgba(111, 181, 240, 0.3);
+            border-radius: 10px;
+        }
+
+        .syllabus-content {
+            flex: 1;
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 28px;
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .syllabus-content::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .syllabus-content::-webkit-scrollbar-thumb {
+            background: rgba(111, 181, 240, 0.25);
+            border-radius: 10px;
+        }
+
+        .content-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-light);
+            font-size: 0.9rem;
+            gap: 10px;
+            opacity: 0.6;
+        }
+
+        .content-placeholder i {
+            font-size: 2.5rem;
+        }
+
+        .content-title-main {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: var(--text-main);
+            margin-bottom: 4px;
+            letter-spacing: -0.5px;
+        }
+
+        .content-subtitle {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--sky-600);
+            margin-bottom: 16px;
+        }
+
+        .content-body-text {
+            font-size: 0.92rem;
+            line-height: 1.8;
+            color: var(--text-main);
+            text-align: justify;
+        }
+
+        .content-meta {
+            margin-top: 20px;
+            font-size: 0.75rem;
+            color: var(--text-light);
+            padding-top: 12px;
+            border-top: 1px solid rgba(200, 220, 240, 0.3);
+        }
+
+        /* Tree nodes as pill cards */
+        .tree-node {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 11px 14px;
+            margin-bottom: 6px;
+            border-radius: 12px;
+            background: rgba(200, 220, 240, 0.35);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.88rem;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        .tree-node:hover {
+            background: rgba(180, 210, 240, 0.55);
+            transform: translateX(2px);
+        }
+
+        .tree-node.active {
+            background: rgba(111, 181, 240, 0.35);
+            font-weight: 700;
+            color: var(--sky-700);
+            box-shadow: 0 2px 8px rgba(60, 130, 200, 0.15);
+        }
+
+        .tree-node .node-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tree-node .node-arrow {
+            font-size: 1rem;
+            color: var(--sky-500);
+            opacity: 0.7;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        /* Empty state */
+        .empty-syllabus {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        .empty-syllabus i {
+            font-size: 2.5rem;
+            display: block;
+            margin-bottom: 12px;
+            opacity: 0.4;
+        }
+
+        /* Animations */
+        @keyframes fadeInContent {
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in {
+            animation: fadeInContent 0.3s ease;
+        }
+
+        /* Responsive */
+        @media (max-width: 700px) {
+            .syllabus-layout {
+                flex-direction: column;
+            }
+
+            .syllabus-sidebar {
+                flex: none;
+                max-height: 250px;
+                border-right: none;
+                border-bottom: 1.5px solid rgba(200, 220, 240, 0.25);
+            }
+
+            .syllabus-content {
+                max-height: 300px;
+            }
+        }
     </style>
 </head>
 
@@ -555,7 +840,7 @@
             </div>
 
             <!-- Upload Card -->
-            <div class="glass-card">
+            <div class="glass-card" id="uploadCard">
                 <div class="card-title">
                     <i class="bi bi-file-earmark-pdf-fill"></i>
                     Subir Temario
@@ -601,6 +886,46 @@
                         <div class="progress-bar-fill" id="progressBar"></div>
                     </div>
                 </form>
+            </div>
+
+            <!-- Syllabus Viewer Card (se muestra si hay temario) -->
+            <div class="glass-card" id="syllabusViewerCard" style="display:none;">
+                <!-- Header con dropdown -->
+                <div class="syllabus-header">
+                    <div class="syllabus-header-title">
+                        <i class="bi bi-book-fill"></i>
+                        Temario
+                    </div>
+                    <div class="dropdown-wrapper">
+                        <button class="dropdown-trigger" id="temarioDropdownBtn" onclick="toggleTemarioDropdown()">
+                            <i class="bi bi-gear"></i> Opciones <i class="bi bi-chevron-down"
+                                style="font-size:0.7rem;"></i>
+                        </button>
+                        <div class="dropdown-menu-custom" id="temarioDropdown">
+                            <button class="dropdown-item-custom" onclick="handleRefrescar()">
+                                <i class="bi bi-arrow-clockwise"></i> Refrescar
+                            </button>
+                            <button class="dropdown-item-custom" onclick="handleAnadir()">
+                                <i class="bi bi-plus-circle"></i> Añadir temario
+                            </button>
+                            <button class="dropdown-item-custom danger" onclick="handleEliminar()">
+                                <i class="bi bi-trash3"></i> Eliminar todo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layout dos columnas -->
+                <div class="syllabus-layout">
+                    <div class="syllabus-sidebar" id="syllabusTree"></div>
+                    <div class="syllabus-content" id="syllabusContent">
+                        <div class="content-placeholder" id="contentPlaceholder">
+                            <i class="bi bi-hand-index-thumb"></i>
+                            Selecciona un tema para ver su contenido
+                        </div>
+                        <div id="contentViewArea" style="display:none;"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- Test Tutor Button -->
@@ -750,7 +1075,7 @@
 
         // ---- Test Tutor ----
         document.getElementById('testTutorBtn').addEventListener('click', () => {
-            window.location.href = 'index.html';
+            window.location.href = 'tutor.html';
         });
 
         // ---- Logout ----
@@ -786,6 +1111,211 @@
         if (sessionStorage.getItem('userRole') !== 'Instructor') {
             window.location.href = 'login.html';
         }
+
+        // ---- Syllabus Viewer v2 ----
+
+        // Estado
+        let syllabusData = [];
+
+        // Auto-cargar al iniciar
+        document.addEventListener('DOMContentLoaded', () => {
+            checkSyllabus();
+        });
+
+        // Comprobar si hay temario y mostrar la vista correcta
+        async function checkSyllabus() {
+            try {
+                const response = await fetch(`${API_URL}/syllabus`);
+                if (!response.ok) throw new Error(`Error ${response.status}`);
+                const data = await response.json();
+                syllabusData = data;
+
+                if (data && data.length > 0) {
+                    showSyllabusViewer(data);
+                } else {
+                    showUploadForm();
+                }
+            } catch (error) {
+                console.error('Error checking syllabus:', error);
+                showUploadForm();
+            }
+        }
+
+        function showUploadForm() {
+            document.getElementById('uploadCard').style.display = 'block';
+            document.getElementById('syllabusViewerCard').style.display = 'none';
+        }
+
+        function showSyllabusViewer(data) {
+            document.getElementById('uploadCard').style.display = 'none';
+            document.getElementById('syllabusViewerCard').style.display = 'block';
+            renderSyllabusTree(data);
+        }
+
+        // ---- Dropdown ----
+        function toggleTemarioDropdown() {
+            const menu = document.getElementById('temarioDropdown');
+            menu.classList.toggle('open');
+        }
+
+        // Cerrar dropdown al hacer clic fuera
+        document.addEventListener('click', (e) => {
+            const wrapper = document.querySelector('.dropdown-wrapper');
+            if (wrapper && !wrapper.contains(e.target)) {
+                document.getElementById('temarioDropdown').classList.remove('open');
+            }
+        });
+
+        function handleRefrescar() {
+            document.getElementById('temarioDropdown').classList.remove('open');
+            showToast('Refrescando temario...');
+            checkSyllabus();
+        }
+
+        function handleAnadir() {
+            document.getElementById('temarioDropdown').classList.remove('open');
+            // Mostrar el formulario de subida
+            document.getElementById('uploadCard').style.display = 'block';
+            // Scroll hasta el formulario
+            document.getElementById('uploadCard').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function handleEliminar() {
+            document.getElementById('temarioDropdown').classList.remove('open');
+            if (confirm('¿Estás seguro de que quieres eliminar TODO el temario? Esta acción no se puede deshacer.')) {
+                showToast('Función de eliminación pendiente de implementar en el backend', true);
+                // TODO: Llamar a DELETE /syllabus cuando esté implementado
+            }
+        }
+
+        // ---- Tree Rendering ----
+        function renderSyllabusTree(data) {
+            const container = document.getElementById('syllabusTree');
+
+            if (!data || data.length === 0) {
+                container.innerHTML = `<div class="empty-syllabus">
+                    <i class="bi bi-inbox"></i>
+                    No se encontraron temas.
+                </div>`;
+                return;
+            }
+
+            // Build tree from flat data
+            const nodeMap = {};
+            const roots = [];
+
+            data.forEach(item => {
+                nodeMap[item.id] = { ...item, children: [] };
+            });
+
+            data.forEach(item => {
+                if (item.parent_id && nodeMap[item.parent_id]) {
+                    nodeMap[item.parent_id].children.push(nodeMap[item.id]);
+                } else {
+                    roots.push(nodeMap[item.id]);
+                }
+            });
+
+            // Flatten tree to ordered list for arrow logic
+            const flatList = [];
+            function flattenNode(node, depth) {
+                flatList.push({ ...node, depth });
+                if (node.children.length > 0) {
+                    node.children.sort((a, b) => a.orden - b.orden);
+                    node.children.forEach(child => flattenNode(child, depth + 1));
+                }
+            }
+            roots.sort((a, b) => a.orden - b.orden);
+            roots.forEach(root => flattenNode(root, 0));
+
+            // Render
+            let html = '';
+            flatList.forEach((node, idx) => {
+                const indent = node.depth * 24;
+                const isFirst = idx === 0;
+                const isLast = idx === flatList.length - 1;
+                const arrow = isLast ? '↓' : '↑';
+
+                html += `<div class="tree-node" style="margin-left: ${indent}px;"
+                     onclick="selectTopic(${node.id}, this)"
+                     data-id="${node.id}">
+                    <span class="node-name">${node.nombre}</span>
+                    <span class="node-arrow">${arrow}</span>
+                </div>`;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // ---- Topic Content ----
+        async function selectTopic(topicId, element) {
+            // Visual: marcar activo
+            document.querySelectorAll('.tree-node').forEach(n => n.classList.remove('active'));
+            element.classList.add('active');
+
+            const placeholder = document.getElementById('contentPlaceholder');
+            const viewArea = document.getElementById('contentViewArea');
+
+            placeholder.style.display = 'none';
+            viewArea.style.display = 'block';
+            viewArea.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-light);"><i class="bi bi-hourglass-split" style="font-size:1.5rem;"></i><br>Cargando...</div>';
+
+            try {
+                const response = await fetch(`${API_URL}/syllabus/${topicId}/content`);
+                if (!response.ok) throw new Error(`Error ${response.status}`);
+
+                const data = await response.json();
+                let contentHTML = '';
+
+                // Título grande
+                contentHTML += `<div class="content-title-main fade-in">${data.titulo || 'Sin título'}</div>`;
+
+                // Contenido
+                if (data.contenido && data.contenido.trim()) {
+                    // Detectar primer subtítulo si existe
+                    const lines = data.contenido.split('\n').filter(l => l.trim());
+                    let firstSubtitle = '';
+                    let bodyText = data.contenido;
+
+                    // Si la primera línea es corta, tratar como subtítulo
+                    if (lines.length > 1 && lines[0].length < 80) {
+                        firstSubtitle = lines[0];
+                        bodyText = lines.slice(1).join('\n');
+                    }
+
+                    if (firstSubtitle) {
+                        contentHTML += `<div class="content-subtitle fade-in">${firstSubtitle}</div>`;
+                    }
+
+                    contentHTML += `<div class="content-body-text fade-in">${bodyText
+                        .replace(/\n\n/g, '<br><br>')
+                        .replace(/\n/g, '<br>')}</div>`;
+                } else {
+                    contentHTML += '<div class="content-body-text fade-in" style="color:var(--text-light);font-style:italic;">Este tema no tiene contenido asignado aún.</div>';
+                }
+
+                contentHTML += `<div class="content-meta fade-in">
+                    📊 ${data.bloques_count || 0} bloques de contenido | ID: ${data.id}
+                </div>`;
+
+                viewArea.innerHTML = contentHTML;
+
+            } catch (error) {
+                viewArea.innerHTML = `<div style="color:#e74c3c;padding:20px;">
+                    <i class="bi bi-exclamation-triangle"></i> Error: ${error.message}
+                </div>`;
+                console.error('Content load error:', error);
+            }
+        }
+
+        // Modificar el upload para recargar vista después de subir
+        const origSubmitHandler = uploadForm.onsubmit;
+        uploadForm.addEventListener('submit', function afterUpload() {
+            // Después de que termine la subida, recargar syllabus
+            const origFetch = window.fetch;
+            // Dar 2 segundos para que termine el procesamiento
+            setTimeout(() => checkSyllabus(), 3000);
+        });
     </script>
 
     <!-- Bootstrap spinner CSS only (for the button spinner) -->

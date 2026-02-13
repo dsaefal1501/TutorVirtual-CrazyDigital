@@ -230,3 +230,28 @@ async def text_to_speech(
         raise HTTPException(status_code=500, detail=f"Error generando audio: {str(e)}")
 
 
+# ============================================================================
+# ENDPOINTS DE VISUALIZACIÓN DE TEMARIO (INSTRUCTOR)
+# ============================================================================
+
+@app.get("/syllabus")
+def get_syllabus(db: Session = Depends(get_db)):
+    """
+    Devuelve la jerarquía completa del temario (para el árbol del instructor).
+    """
+    try:
+        return rag_service.obtener_jerarquia_temario(db)
+    except Exception as e:
+        print(f"Error obteniendo syllabus: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/syllabus/{temario_id}/content")
+def get_syllabus_content(temario_id: int, db: Session = Depends(get_db)):
+    """
+    Devuelve el contenido textual de un tema específico.
+    """
+    try:
+        return rag_service.obtener_contenido_tema(db, temario_id)
+    except Exception as e:
+        print(f"Error obteniendo contenido tema {temario_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

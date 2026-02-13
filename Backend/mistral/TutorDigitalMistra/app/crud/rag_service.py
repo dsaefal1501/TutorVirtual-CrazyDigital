@@ -575,3 +575,46 @@ def sincronizar_temario_a_conocimiento(db: Session) -> int:
     
     db.commit()
     return count
+
+# ============================================================================
+# 8. UTILIDADES PARA EL PANEL DE INSTRUCTOR
+# ============================================================================
+
+def obtener_jerarquia_temario(db: Session) -> List[Dict]:
+    """
+    Devuelve la lista completa de temas ordenada para construir el árbol UI.
+    """
+    temas = db.query(Temario).order_by(Temario.nivel, Temario.orden).all()
+    if not temas:
+        return []
+    
+    resultado = []
+    for t in temas:
+        resultado.append({
+            "id": t.id,
+            "nombre": t.nombre,
+            "nivel": t.nivel,
+            "orden": t.orden,
+            "parent_id": t.parent_id
+        })
+    
+    resultado.sort(key=lambda x: x["id"])
+    return resultado
+
+
+def obtener_contenido_tema(db: Session, temario_id: int) -> Dict:
+    """
+    Devuelve el contenido (bloques de texto) de un tema específico.
+    """
+    bloques = _obtener_bloques_tema_completo(db, temario_id)
+    
+    texto_completo = "\n\n".join([b.contenido for b in bloques])
+    
+    nombre_tema = db.query(Temario.nombre).filter(Temario.id == temario_id).scalar()
+    
+    return {
+        "id": temario_id,
+        "titulo": nombre_tema or "Sin título",
+        "contenido": texto_completo,
+        "bloques_count": len(bloques)
+    }

@@ -1,14 +1,15 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>CrazyTeacher | Acceso</title>
-    
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
+
     <style>
         /* --- VARIABLES --- */
         :root {
@@ -23,109 +24,294 @@
             --shadow-input: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
         }
 
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
 
-        body, html { 
-            width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; 
+        body,
+        html {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
             font-family: 'Inter', sans-serif;
-            /* Fondo base por si falla la carga */
-            background-color: #CFE4FF; 
+            background-color: #CFE4FF;
         }
 
         /* --- FONDO ANIMADO --- */
         #login-container {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-end) 100%);
-            display: flex; justify-content: center; align-items: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         .ambient-shape {
-            position: absolute; filter: blur(90px); z-index: 0; opacity: 0.5;
+            position: absolute;
+            filter: blur(90px);
+            z-index: 0;
+            opacity: 0.5;
             animation: float 10s infinite ease-in-out;
         }
+
         .shape-1 {
-            top: -15%; left: -10%; width: 600px; height: 600px;
-            background: #cbdcf5; border-radius: 50%;
+            top: -15%;
+            left: -10%;
+            width: 600px;
+            height: 600px;
+            background: #cbdcf5;
+            border-radius: 50%;
         }
+
         .shape-2 {
-            bottom: -15%; right: -5%; width: 500px; height: 500px;
-            background: #a3c9ff; border-radius: 50%; animation-delay: -5s;
+            bottom: -15%;
+            right: -5%;
+            width: 500px;
+            height: 500px;
+            background: #a3c9ff;
+            border-radius: 50%;
+            animation-delay: -5s;
         }
+
         @keyframes float {
-            0%, 100% { transform: translate(0, 0); }
-            50% { transform: translate(30px, 40px); }
+
+            0%,
+            100% {
+                transform: translate(0, 0);
+            }
+
+            50% {
+                transform: translate(30px, 40px);
+            }
         }
 
         /* --- TARJETA PRINCIPAL --- */
         .main-card {
-            position: relative; z-index: 10; width: 90%; max-width: 400px;
+            position: relative;
+            z-index: 10;
+            width: 90%;
+            max-width: 400px;
             background: var(--glass-bg);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border: 1px solid var(--glass-border);
-            border-radius: 24px; padding: 40px 30px;
+            border-radius: 24px;
+            padding: 40px 30px;
             box-shadow: var(--shadow-card);
-            display: flex; flex-direction: column; align-items: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             transition: all 0.3s ease;
         }
 
         /* --- UI ELEMENTS --- */
-        .logo-area { margin-bottom: 25px; text-align: center; cursor: default; }
-        .logo-icon { font-size: 2.5rem; margin-bottom: 5px; display: inline-block; transition: transform 0.3s; }
-        .logo-area:hover .logo-icon { animation: crazy-shake 0.5s ease-in-out infinite; }
-        
-        @keyframes crazy-shake {
-            0% { transform: rotate(0deg); } 25% { transform: rotate(-10deg); }
-            75% { transform: rotate(10deg); } 100% { transform: rotate(0deg); }
+        .logo-area {
+            margin-bottom: 25px;
+            text-align: center;
+            cursor: default;
         }
 
-        .app-title { font-size: 1.6rem; font-weight: 800; color: var(--text-main); letter-spacing: -0.5px; }
-        .app-subtitle { font-size: 0.9rem; color: var(--text-light); margin-top: 2px; }
+        .logo-icon {
+            font-size: 2.5rem;
+            margin-bottom: 5px;
+            display: inline-block;
+            transition: transform 0.3s;
+        }
+
+        .logo-area:hover .logo-icon {
+            animation: crazy-shake 0.5s ease-in-out infinite;
+        }
+
+        @keyframes crazy-shake {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            25% {
+                transform: rotate(-10deg);
+            }
+
+            75% {
+                transform: rotate(10deg);
+            }
+
+            100% {
+                transform: rotate(0deg);
+            }
+        }
+
+        .app-title {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: var(--text-main);
+            letter-spacing: -0.5px;
+        }
+
+        .app-subtitle {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-top: 2px;
+        }
 
         /* Animación de Vistas */
-        .view-section { width: 100%; display: none; animation: fadeIn 0.4s ease forwards; }
-        .view-section.active { display: block; }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        .view-section {
+            width: 100%;
+            display: none;
+            animation: fadeIn 0.4s ease forwards;
         }
 
-        .divider { display: flex; align-items: center; color: var(--text-light); font-size: 0.85rem; margin: 20px 0; width: 100%; }
-        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #cbd5e1; opacity: 0.7; }
-        .divider span { padding: 0 12px; }
+        .view-section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            color: var(--text-light);
+            font-size: 0.85rem;
+            margin: 20px 0;
+            width: 100%;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #cbd5e1;
+            opacity: 0.7;
+        }
+
+        .divider span {
+            padding: 0 12px;
+        }
 
         .btn-custom {
-            width: 100%; padding: 14px; border: none; border-radius: 50px;
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 50px;
             background: linear-gradient(to bottom, #7fabda, #6fa0e0);
-            color: white; font-size: 1rem; font-weight: 600; cursor: pointer;
-            box-shadow: 0 4px 6px rgba(50, 50, 93, 0.1), inset 0 1px 0 rgba(255,255,255,0.3);
-            transition: all 0.2s; margin-bottom: 12px; text-align: center;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(50, 50, 93, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            transition: all 0.2s;
+            margin-bottom: 12px;
+            text-align: center;
         }
-        .btn-custom:hover { transform: translateY(-2px); filter: brightness(1.05); box-shadow: 0 7px 14px rgba(50, 50, 93, 0.15); }
+
+        .btn-custom:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.05);
+            box-shadow: 0 7px 14px rgba(50, 50, 93, 0.15);
+        }
+
+        /* Botón Instructor */
+        .btn-instructor {
+            background: linear-gradient(to bottom, #7f8bda, #6f7ae0);
+        }
 
         .btn-ghost {
-            background: transparent; color: var(--primary); box-shadow: none;
-            font-size: 0.9rem; padding: 8px; margin-top: 5px; border: none; cursor: pointer; width: 100%;
+            background: transparent;
+            color: var(--primary);
+            box-shadow: none;
+            font-size: 0.9rem;
+            padding: 8px;
+            margin-top: 5px;
+            border: none;
+            cursor: pointer;
+            width: 100%;
         }
-        .btn-ghost:hover { background: rgba(111, 160, 224, 0.1); transform: none; border-radius: 50px; }
 
-        .input-group-custom { margin-bottom: 16px; position: relative; width: 100%; }
-        .label-custom { display: block; color: #64748b; font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; margin-left: 8px; text-align: left; }
-        .input-field {
-            width: 100%; padding: 14px 20px; border-radius: 50px;
-            border: 1px solid transparent; background: white;
-            font-size: 1rem; color: var(--text-main);
-            box-shadow: var(--shadow-input); outline: none; transition: all 0.2s;
+        .btn-ghost:hover {
+            background: rgba(111, 160, 224, 0.1);
+            transform: none;
+            border-radius: 50px;
         }
+
+        .input-group-custom {
+            margin-bottom: 16px;
+            position: relative;
+            width: 100%;
+        }
+
+        .label-custom {
+            display: block;
+            color: #64748b;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 6px;
+            margin-left: 8px;
+            text-align: left;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 14px 20px;
+            border-radius: 50px;
+            border: 1px solid transparent;
+            background: white;
+            font-size: 1rem;
+            color: var(--text-main);
+            box-shadow: var(--shadow-input);
+            outline: none;
+            transition: all 0.2s;
+        }
+
         .input-field:focus {
-            border-color: var(--primary); background: #fff;
+            border-color: var(--primary);
+            background: #fff;
             box-shadow: 0 0 0 4px rgba(111, 160, 224, 0.15);
         }
 
-        .toggle-password { position: absolute; right: 15px; top: 38px; color: #94a3b8; cursor: pointer; transition: color 0.2s; z-index: 5; }
-        .toggle-password:hover { color: var(--primary); }
+        .toggle-password {
+            position: absolute;
+            right: 15px;
+            top: 38px;
+            color: #94a3b8;
+            cursor: pointer;
+            transition: color 0.2s;
+            z-index: 5;
+        }
 
-        .footer-links { margin-top: 25px; font-size: 0.75rem; color: var(--text-light); display: flex; gap: 15px; opacity: 0.8; justify-content: center; }
-        .footer-links a { color: inherit; text-decoration: none; }
+        .toggle-password:hover {
+            color: var(--primary);
+        }
+
+        .footer-links {
+            margin-top: 25px;
+            font-size: 0.75rem;
+            color: var(--text-light);
+            display: flex;
+            gap: 15px;
+            opacity: 0.8;
+            justify-content: center;
+        }
+
+        .footer-links a {
+            color: inherit;
+            text-decoration: none;
+        }
     </style>
 </head>
 
@@ -142,35 +328,62 @@
                 <div class="app-subtitle" id="dynamic-subtitle">Tu aula virtual, pero divertida</div>
             </div>
 
+            <!-- Vista: Selección de Rol -->
             <div id="view-role" class="view-section active">
                 <div class="divider"><span>Inicia sesión cómo:</span></div>
                 <button class="btn-custom" onclick="goToLogin('Alumno')">Alumno</button>
                 <div style="text-align:center; color:#94a3b8; font-size:0.9rem; margin-bottom:12px;">ó</div>
-                <button class="btn-custom" onclick="goToLogin('Instructor')">Instructor</button>
+                <button class="btn-custom btn-instructor" onclick="goToLogin('Instructor')">Instructor</button>
                 <div class="divider" style="margin-top: 25px;"></div>
                 <button class="btn-ghost" onclick="goToRegister()">¿Nuevo aquí? Regístrate gratis</button>
             </div>
 
-            <div id="view-login" class="view-section">
-                <div class="divider"><span id="role-indicator">Login</span></div>
-                
-                <form onsubmit="handleLoginSubmit(event)">
+            <!-- Login Alumno -->
+            <div id="view-login-student" class="view-section">
+                <div class="divider"><span>Acceso Alumno</span></div>
+
+                <form onsubmit="handleLoginStudent(event)">
                     <div class="input-group-custom">
                         <label class="label-custom">Usuario</label>
                         <input type="text" class="input-field" placeholder="Tu usuario" required>
                     </div>
                     <div class="input-group-custom">
                         <label class="label-custom">Contraseña</label>
-                        <input type="password" id="login-pass" class="input-field" placeholder="••••••••" required>
-                        <div class="toggle-password" onclick="togglePass('login-pass')">👁️</div>
+                        <input type="password" id="pass-student" class="input-field" placeholder="••••••••" required>
+                        <div class="toggle-password" onclick="togglePass('pass-student')">👁️</div>
                     </div>
-                    <button type="submit" class="btn-custom" id="btnLogin">Entrar</button>
+                    <button type="submit" class="btn-custom" id="btnLoginStudent">Entrar como Alumno</button>
                 </form>
 
-                <button class="btn-custom" style="background: #a3bfd9; margin-top:5px;" onclick="goToRecovery()">He olvidado mi contraseña</button>
+                <button class="btn-custom" style="background: #a3bfd9; margin-top:5px;" onclick="goToRecovery()">He
+                    olvidado mi contraseña</button>
                 <button class="btn-ghost" onclick="goBack('view-role')" style="margin-top:15px;">← Volver</button>
             </div>
 
+            <!-- Login Instructor -->
+            <div id="view-login-instructor" class="view-section">
+                <div class="divider"><span>Acceso Instructor</span></div>
+
+                <form onsubmit="handleLoginInstructor(event)">
+                    <div class="input-group-custom">
+                        <label class="label-custom">Usuario Instructor</label>
+                        <input type="text" class="input-field" placeholder="Usuario Instructor" required>
+                    </div>
+                    <div class="input-group-custom">
+                        <label class="label-custom">Contraseña</label>
+                        <input type="password" id="pass-instructor" class="input-field" placeholder="••••••••" required>
+                        <div class="toggle-password" onclick="togglePass('pass-instructor')">👁️</div>
+                    </div>
+                    <button type="submit" class="btn-custom btn-instructor" id="btnLoginInstructor">Entrar como
+                        Instructor</button>
+                </form>
+
+                <button class="btn-custom" style="background: #a3bfd9; margin-top:5px;" onclick="goToRecovery()">He
+                    olvidado mi contraseña</button>
+                <button class="btn-ghost" onclick="goBack('view-role')" style="margin-top:15px;">← Volver</button>
+            </div>
+
+            <!-- Registro -->
             <div id="view-register" class="view-section">
                 <div class="divider"><span>Crear Cuenta</span></div>
                 <div class="input-group-custom">
@@ -185,15 +398,17 @@
                 <button class="btn-ghost" onclick="goBack('view-role')">Ya tengo cuenta</button>
             </div>
 
+            <!-- Recuperar contraseña -->
             <div id="view-recovery" class="view-section">
                 <div class="divider"><span>Recuperar</span></div>
-                <p style="text-align:center; color:#64748b; margin-bottom:15px; font-size:0.9rem;">Te enviaremos un código mágico.</p>
+                <p style="text-align:center; color:#64748b; margin-bottom:15px; font-size:0.9rem;">Te enviaremos un
+                    código mágico.</p>
                 <div class="input-group-custom">
                     <label class="label-custom">Email</label>
                     <input type="email" class="input-field" placeholder="ejemplo@clase.com">
                 </div>
                 <button class="btn-custom" onclick="alert('Código enviado (simulado)')">Enviar Código</button>
-                <button class="btn-ghost" onclick="goBack('view-login')" style="margin-top:10px;">Cancelar</button>
+                <button class="btn-ghost" onclick="goBack('view-role')" style="margin-top:10px;">Cancelar</button>
             </div>
 
             <div class="footer-links">
@@ -204,60 +419,80 @@
     </div>
 
     <script>
-      function switchView(id) {
-          document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
-          document.getElementById(id).classList.add('active');
-      }
+        function switchView(id) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
 
-      function goToLogin(role) {
-          document.getElementById('role-indicator').innerText = `Acceso ${role}`;
-          document.getElementById('dynamic-subtitle').innerText = role === 'Alumno' ? '¡Hola Alumno!' : '¡Hola Profe!';
-          switchView('view-login');
-      }
+        function goToLogin(role) {
+            document.getElementById('dynamic-subtitle').innerText = role === 'Alumno' ? '¡Hola Alumno!' : '¡Hola Profe!';
 
-      function goToRegister() {
-          document.getElementById('dynamic-subtitle').innerText = 'Únete a la locura';
-          switchView('view-register');
-      }
+            if (role === 'Alumno') {
+                switchView('view-login-student');
+            } else {
+                switchView('view-login-instructor');
+            }
+        }
 
-      function goToRecovery() {
-          document.getElementById('dynamic-subtitle').innerText = 'Recuperar acceso';
-          switchView('view-recovery');
-      }
+        function goToRegister() {
+            document.getElementById('dynamic-subtitle').innerText = 'Únete a la locura';
+            switchView('view-register');
+        }
 
-      function goBack(target) {
-          switchView(target);
-          if(target === 'view-role') document.getElementById('dynamic-subtitle').innerText = 'Tu aula virtual, pero divertida';
-      }
+        function goToRecovery() {
+            document.getElementById('dynamic-subtitle').innerText = 'Recuperar acceso';
+            switchView('view-recovery');
+        }
 
-      function togglePass(id) {
-          const x = document.getElementById(id);
-          x.type = x.type === "password" ? "text" : "password";
-      }
-      
-      function doRegister() {
-          const btn = event.target;
-          const originalText = btn.innerText;
-          btn.innerText = "Creando...";
-          setTimeout(() => {
-              alert("¡Cuenta simulada creada!");
-              goBack('view-role');
-              btn.innerText = originalText;
-          }, 1000);
-      }
+        function goBack(target) {
+            switchView(target);
+            if (target === 'view-role') document.getElementById('dynamic-subtitle').innerText = 'Tu aula virtual, pero divertida';
+        }
 
-      function handleLoginSubmit(e) {
-        e.preventDefault(); 
-        const btn = document.getElementById('btnLogin');
-        const originalText = btn.innerText;
-        btn.innerText = "Entrando...";
-        
-        // Simular petición al servidor (1 segundo)
-        setTimeout(() => {
-            // REDIRECCIÓN: Aquí saltamos al juego
-            window.location.href = "index.html"; 
-        }, 1000);
-      }
+        function togglePass(id) {
+            const x = document.getElementById(id);
+            x.type = x.type === "password" ? "text" : "password";
+        }
+
+        function doRegister() {
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = "Creando...";
+            setTimeout(() => {
+                alert("¡Cuenta simulada creada!");
+                goBack('view-role');
+                btn.innerText = originalText;
+            }, 1000);
+        }
+
+        // =============================================
+        // LOGIN ALUMNO — Redirige SIEMPRE a tutor.html
+        // =============================================
+        function handleLoginStudent(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnLoginStudent');
+            btn.innerText = "Entrando...";
+
+            setTimeout(() => {
+                sessionStorage.setItem('userRole', 'Alumno');
+                window.location.href = "tutor.html";
+            }, 1000);
+        }
+
+        // ==================================================
+        // LOGIN INSTRUCTOR — Redirige SIEMPRE a instructor.html
+        // ==================================================
+        function handleLoginInstructor(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnLoginInstructor');
+            btn.innerText = "Validando...";
+
+            setTimeout(() => {
+                sessionStorage.setItem('userRole', 'Instructor');
+                window.location.href = "instructor.html";
+            }, 1000);
+        }
     </script>
 </body>
+
 </html>

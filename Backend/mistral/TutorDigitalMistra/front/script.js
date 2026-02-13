@@ -368,7 +368,8 @@ async function handleConversationTurn(text) {
 }
 
 async function processBackendResponse(text, onChunkReceived) {
-    const isStream = streamToggle && streamToggle.checked;
+    // Si no existe el toggle en el DOM, streaming activado por defecto
+    const isStream = streamToggle ? streamToggle.checked : true;
     const endpoint = isStream ? '/ask/stream' : '/ask';
 
     const response = await fetch(`${API_URL}${endpoint}`, {
