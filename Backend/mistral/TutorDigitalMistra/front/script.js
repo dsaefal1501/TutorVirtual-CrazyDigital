@@ -59,7 +59,7 @@ let isProcessing = false;
 let currentAudio = null;       // HTMLAudioElement activo
 let currentAudioUrl = null;    // URL.createObjectURL activo (para liberar memoria)
 let ttsEnabled = true;         // Toggle global de TTS
-let ttsSpeed = 5.0;            // Velocidad de TTS (0.5 - 5.0)
+let ttsSpeed = 1.35;            // Velocidad de TTS (0.5 - 5.0)
 
 // --- NUEVO: TTS Chunked Pipeline ---
 let ttsChunkQueue = [];         // Cola de chunks: { text, audioPromise, audioBlob, subtitleWords }
@@ -271,6 +271,21 @@ async function handleSendMessage(text) {
         // Flush TTS sentence buffer (por si quedó algo pendiente)
         if (ttsEnabled) {
             flushTTSSentenceBuffer();
+
+            // Configurar callback para cuando el audio termine
+            ttsOnEndCallback = () => {
+                subtitleText.innerText = "";
+                botIsSpeaking = false;
+                if (window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 0);
+                updateMicVisuals(false, "Escuchando...");
+            };
+
+            // Si no hay chunks pendientes ni reproduciéndose, limpiar inmediatamente
+            if (ttsChunkQueue.length === 0 && !ttsIsPlaying) {
+                const cb = ttsOnEndCallback;
+                ttsOnEndCallback = null;
+                if (cb) cb();
+            }
         }
 
         // Si NO hay TTS, mantener el sistema anterior de subtítulos
@@ -567,6 +582,36 @@ function cleanTextForTTS(rawText) {
 }
 
 /**
+ * Extrae las etiquetas de emoción del texto crudo y sus posiciones (en número de palabra).
+ * Retorna un array de { tag: '[Happy]', wordIndex: N } indicando en qué palabra
+ * del texto limpio debe activarse cada emoción.
+ */
+function extractEmotionSchedule(rawText) {
+    const parts = rawText.split(/(\[.*?\])/g);
+    const schedule = [];
+    let wordCount = 0;
+
+    for (const part of parts) {
+        if (/^\[.*\]$/.test(part)) {
+            // Es una etiqueta de emoción → guardar con la posición actual
+            schedule.push({ tag: part, wordIndex: wordCount });
+        } else {
+            // Es texto → contar sus palabras (misma limpieza que cleanTextForTTS)
+            const cleaned = part
+                .replace(/[#*_~`>]/g, '')
+                .replace(/\n/g, ' ')
+                .trim();
+            if (cleaned) {
+                const words = cleaned.split(/\s+/).filter(w => w.length > 0);
+                wordCount += words.length;
+            }
+        }
+    }
+
+    return schedule;
+}
+
+/**
  * Divide texto en oraciones usando delimitadores naturales.
  * Busca: . ! ? ; : y también comas seguidas de espacio si la frase es larga.
  */
@@ -643,10 +688,13 @@ function feedTTSSentenceBuffer(chunk) {
  */
 function flushTTSSentenceBuffer() {
     if (ttsSentenceBuffer.trim()) {
-        const cleaned = cleanTextForTTS(ttsSentenceBuffer.trim());
+        const rawText = ttsSentenceBuffer.trim();
+        // Extraer etiquetas de emoción ANTES de limpiar el texto
+        const emotionTags = extractEmotionSchedule(rawText);
+        const cleaned = cleanTextForTTS(rawText);
         if (cleaned.length > 2) {
-            console.log(`[TTS] Enviando texto completo (${cleaned.length} chars) como UNA sola petición`);
-            enqueueTTSChunk(cleaned);
+            console.log(`[TTS] Enviando texto completo (${cleaned.length} chars) con ${emotionTags.length} emociones`);
+            enqueueTTSChunk(cleaned, emotionTags);
         }
         ttsSentenceBuffer = "";
     }
@@ -657,7 +705,7 @@ function flushTTSSentenceBuffer() {
  * Lanza la petición de generación de audio inmediatamente (en paralelo).
  * El audio se reproducirá en orden cuando le toque.
  */
-function enqueueTTSChunk(text) {
+function enqueueTTSChunk(text, emotionTags = []) {
     if (ttsAborted) return;
 
     const chunkId = ttsChunkIndex++;
@@ -674,6 +722,7 @@ function enqueueTTSChunk(text) {
         text: text,
         audioPromise: audioPromise,
         subtitleWords: subtitleWords,
+        emotionTags: emotionTags,  // Etiquetas de emoción con posiciones
         resolved: false,
         audioBlob: null,
     };
@@ -786,8 +835,8 @@ async function playNextTTSChunk() {
             const duration = audio.duration; // en segundos
             console.log(`[TTS Chunk ${chunk.id}] Reproduciendo (${duration.toFixed(2)}s): "${chunk.text.substring(0, 40)}..."`);
 
-            // Mostrar subtítulos sincronizados con la duración real del audio
-            showSyncedSubtitles(chunk.subtitleWords, duration);
+            // Mostrar subtítulos y emociones sincronizados con la duración real del audio
+            showSyncedSubtitles(chunk.subtitleWords, duration, chunk.emotionTags);
         });
 
         audio.addEventListener('ended', () => {
@@ -819,23 +868,40 @@ async function playNextTTSChunk() {
 
 /**
  * Muestra subtítulos sincronizados con la duración real del audio.
- * Divide las palabras en grupos legibles y los muestra progresivamente.
+ * También programa las etiquetas de emoción para que se envíen a Unity
+ * en el momento correcto según su posición en el texto.
  */
-function showSyncedSubtitles(words, audioDurationSec) {
+function showSyncedSubtitles(words, audioDurationSec, emotionTags = []) {
     if (!words || words.length === 0) return;
 
     const totalWords = words.length;
     const totalDurationMs = audioDurationSec * 1000;
+    const timePerWord = totalDurationMs / totalWords;
 
-    // Calcular cuántas "pantallas" de subtítulos necesitamos
-    // Usamos grupos de hasta SUBTITLE_MAX_WORDS palabras
+    // --- Programar etiquetas de emoción sincronizadas con el audio ---
+    if (emotionTags && emotionTags.length > 0) {
+        emotionTags.forEach(({ tag, wordIndex }) => {
+            const triggerAt = wordIndex * timePerWord;
+            setTimeout(() => {
+                if (ttsAborted) return;
+                console.log(`[Emotion] ${tag} @ palabra ${wordIndex} (${(triggerAt / 1000).toFixed(1)}s)`);
+                if (window.unityInstance) {
+                    window.unityInstance.SendMessage('Tutor', 'SetExpression', tag);
+                }
+            }, triggerAt);
+        });
+
+        // Activar la primera emoción inmediatamente si está al inicio
+        if (emotionTags[0].wordIndex === 0 && window.unityInstance) {
+            window.unityInstance.SendMessage('Tutor', 'SetExpression', emotionTags[0].tag);
+        }
+    }
+
+    // --- Programar subtítulos sincronizados ---
     const groups = [];
     for (let i = 0; i < totalWords; i += SUBTITLE_MAX_WORDS) {
         groups.push(words.slice(i, i + SUBTITLE_MAX_WORDS).join(" "));
     }
-
-    // Duración por grupo, proporcional a las palabras que contiene
-    const timePerWord = totalDurationMs / totalWords;
 
     let elapsed = 0;
     groups.forEach((groupText, idx) => {
