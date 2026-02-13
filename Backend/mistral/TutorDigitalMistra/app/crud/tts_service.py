@@ -1,93 +1,123 @@
 """
-Servicio de Text-to-Speech — Azure gpt-4o-mini-tts
-Convierte texto a audio usando el deployment de Azure OpenAI.
+Servicio de Text-to-Speech — edge-tts (Microsoft Neural Voices)
+Convierte texto a audio usando las voces neurales gratuitas de Microsoft Edge.
+Rápido, consistente y sin coste.
 """
-import os
-import httpx
-from typing import Optional
+import asyncio
+import edge_tts
 
 # ============================================================================
-# Configuración del Cliente TTS
+# Configuración de Voces
 # ============================================================================
 
-AZURE_TTS_ENDPOINT = os.getenv("AZURE_TTS_ENDPOINT", "")
-AZURE_TTS_API_KEY = os.getenv("AZURE_TTS_API_KEY", "")
-AZURE_TTS_DEPLOYMENT = os.getenv("AZURE_TTS_DEPLOYMENT", "gpt-4o-mini-tts")
-TTS_API_VERSION = "2025-03-01-preview"
+# Voces españolas disponibles en edge-tts
+VOCES_DISPONIBLES = {
+    "alvaro": "es-ES-AlvaroNeural",       # Masculina España
+    "elvira": "es-ES-ElviraNeural",        # Femenina España
+    "jorge": "es-MX-JorgeNeural",          # Masculina México
+    "dalia": "es-MX-DaliaNeural",          # Femenina México
+}
 
-# Voces disponibles en gpt-4o-mini-tts
-VOCES_DISPONIBLES = ["onyx"]
+VOZ_DEFAULT = "es-ES-AlvaroNeural"
+
+
+def _speed_to_rate(speed: float) -> str:
+    """
+    Convierte un valor numérico de velocidad (ej: 1.35) al formato
+    de porcentaje que usa edge-tts (ej: "+35%").
+    
+    speed=1.0 → "+0%", speed=1.5 → "+50%", speed=0.5 → "-50%"
+    """
+    # Limitar el rango razonable
+    speed = max(0.25, min(3.0, speed))
+    percentage = int((speed - 1.0) * 100)
+    sign = "+" if percentage >= 0 else ""
+    return f"{sign}{percentage}%"
+
+
+async def _generar_audio_async(
+    texto: str,
+    voz: str = VOZ_DEFAULT,
+    speed: float = 1.0,
+) -> bytes:
+    """
+    Genera audio desde texto usando edge-tts (async).
+    Retorna bytes del audio MP3.
+    """
+    rate = _speed_to_rate(speed)
+    
+    communicate = edge_tts.Communicate(
+        text=texto,
+        voice=voz,
+        rate=rate,
+    )
+    
+    audio_chunks = []
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio_chunks.append(chunk["data"])
+    
+    return b"".join(audio_chunks)
 
 
 def generar_audio_tts(
     texto: str,
-    voz: str = "onyx",
-    instrucciones: Optional[str] = None,
-    speed: float = 4.0,
+    voz: str = "alvaro",
+    instrucciones: str = None,  # Se mantiene por compatibilidad, pero no se usa
+    speed: float = 1.0,
 ) -> bytes:
     """
-    Genera audio desde texto usando Azure gpt-4o-mini-tts.
+    Genera audio desde texto usando edge-tts (Microsoft Neural Voices).
     
     Args:
         texto: El texto a convertir en audio
-        voz: La voz a usar (onyx)
-        instrucciones: Instrucciones opcionales para controlar el estilo de la voz
+        voz: Nombre corto de la voz (alvaro, elvira, jorge, dalia) o nombre completo
+        instrucciones: No se usa en edge-tts (se mantiene por compatibilidad)
+        speed: Velocidad de reproducción (0.25 a 3.0, donde 1.0 es normal)
     
     Returns:
         bytes del audio generado (formato mp3)
     
     Raises:
-        ValueError: Si faltan credenciales o parámetros inválidos
-        httpx.HTTPStatusError: Si la API responde con error
+        ValueError: Si la voz no es válida o el texto está vacío
+        Exception: Si hay error en la generación
     """
-    if not AZURE_TTS_ENDPOINT or not AZURE_TTS_API_KEY:
-        raise ValueError("Faltan credenciales de Azure TTS. Configura AZURE_TTS_ENDPOINT y AZURE_TTS_API_KEY en .env")
+    if not texto or not texto.strip():
+        raise ValueError("El texto no puede estar vacío")
     
-    if voz not in VOCES_DISPONIBLES:
-        raise ValueError(f"Voz '{voz}' no disponible. Opciones: {', '.join(VOCES_DISPONIBLES)}")
+    # Resolver nombre de voz
+    if voz in VOCES_DISPONIBLES:
+        voice_id = VOCES_DISPONIBLES[voz]
+    elif voz.startswith("es-"):
+        # Ya es un nombre completo de voz edge-tts
+        voice_id = voz
+    else:
+        # Fallback: usar voz por defecto
+        voice_id = VOZ_DEFAULT
+        print(f"[TTS] Voz '{voz}' no reconocida, usando {VOZ_DEFAULT}")
     
-    # Construir URL del endpoint
-    url = (
-        f"{AZURE_TTS_ENDPOINT.rstrip('/')}/openai/deployments/"
-        f"{AZURE_TTS_DEPLOYMENT}/audio/speech?api-version={TTS_API_VERSION}"
-    )
+    print(f"[TTS edge-tts] texto='{texto[:60]}...', voz={voice_id}, speed={speed}")
     
-    # Instrucciones por defecto: voz fija y consistente pero natural y expresiva
-    DEFAULT_INSTRUCTIONS = (
-        "Voz: masculina, grave-media, cálida y clara. "
-        "Identidad fija: siempre eres Pablo, un profesor español cercano y apasionado por enseñar. "
-        "Habla en español castellano con naturalidad, como un buen profesor que disfruta explicando. "
-        "Usa entonación expresiva y variada: enfatiza palabras clave, haz pausas naturales entre ideas, "
-        "sube el tono ligeramente en preguntas retóricas. "
-        "Tu ritmo es ágil y dinámico, nunca monótono ni robótico. "
-        "Transmite entusiasmo genuino cuando explicas conceptos interesantes. "
-        "Mantén siempre la misma voz, timbre y personalidad vocal."
-    )
-
-    # Validar speed dentro del rango permitido
-    speed = max(0.25, min(5.0, speed))
-
-    # Payload
-    payload = {
-        "model": AZURE_TTS_DEPLOYMENT,
-        "input": texto,
-        "voice": voz,
-        "speed": speed,
-    }
-    
-    # Usar instrucciones proporcionadas o las por defecto (siempre enviar instrucciones)
-    payload["instructions"] = instrucciones if instrucciones else DEFAULT_INSTRUCTIONS
-    
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {AZURE_TTS_API_KEY}",
-    }
-    
-    # Llamada a la API (sincrónica con httpx)
-    with httpx.Client(timeout=120.0) as client:
-        response = client.post(url, json=payload, headers=headers)
-        if response.status_code != 200:
-            print(f"[TTS ERROR] Status: {response.status_code}")
-            print(f"[TTS ERROR] Body: {response.text}")
-            response.raise_for_status()
-        return response.content
+    # Ejecutar la coroutine async de forma síncrona
+    try:
+        # Intentar obtener un event loop existente
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Si ya hay un loop corriendo (ej: dentro de FastAPI con uvicorn),
+            # crear un nuevo loop en un thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                result = pool.submit(
+                    asyncio.run,
+                    _generar_audio_async(texto, voice_id, speed)
+                ).result(timeout=60)
+            return result
+        else:
+            return loop.run_until_complete(
+                _generar_audio_async(texto, voice_id, speed)
+            )
+    except RuntimeError:
+        # No hay event loop, crear uno nuevo
+        return asyncio.run(
+            _generar_audio_async(texto, voice_id, speed)
+        )

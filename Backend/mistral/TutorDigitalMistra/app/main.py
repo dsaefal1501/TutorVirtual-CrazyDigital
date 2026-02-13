@@ -186,13 +186,13 @@ def grade_multiple_choice(req: GradeMultipleRequest, db: Session = Depends(get_d
 @app.post("/tts")
 def text_to_speech(
     texto: str = Form(..., description="Texto a convertir en audio"),
-    voz: str = Form("onyx", description="Voz: onyx"),
-    instrucciones: str = Form(None, description="Instrucciones opcionales de estilo de voz"),
-    speed: float = Form(1.0, description="Velocidad de reproducción (0.25 a 4.0)"),
+    voz: str = Form("alvaro", description="Voz: alvaro, elvira, jorge, dalia"),
+    instrucciones: str = Form(None, description="No usado (compatibilidad)"),
+    speed: float = Form(1.0, description="Velocidad de reproducción (0.25 a 3.0)"),
 ):
     """
-    Convierte texto a audio usando Azure gpt-4o-mini-tts.
-    Devuelve un archivo de audio MP3.
+    Convierte texto a audio usando edge-tts (Microsoft Neural Voices).
+    Gratis, rápido y con voz consistente.
     """
     print(f"[TTS] Recibido: texto='{texto[:50]}...', voz={voz}, speed={speed}")
     
@@ -203,7 +203,6 @@ def text_to_speech(
         audio_bytes = tts_service.generar_audio_tts(
             texto=texto,
             voz=voz,
-            instrucciones=instrucciones,
             speed=speed,
         )
         return Response(
