@@ -48,10 +48,27 @@ class Usuario(Base):
 
 # --- Módulo: Contenidos (Temario y RAG) ---
 
+class Libro(Base):
+    __tablename__ = "libros"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    titulo: Mapped[str] = mapped_column(String(255))
+    autor: Mapped[Optional[str]] = mapped_column(String(255))
+    descripcion: Mapped[Optional[str]] = mapped_column(Text)
+    pdf_path: Mapped[Optional[str]] = mapped_column(String(500))
+    fecha_creacion: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    activo: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # Relaciones
+    temarios: Mapped[List["Temario"]] = relationship(back_populates="libro")
+    enrollments: Mapped[List["Enrollment"]] = relationship(back_populates="libro")
+
+
 class Temario(Base):
     __tablename__ = "temario"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    libro_id: Mapped[Optional[int]] = mapped_column(ForeignKey("libros.id"), nullable=True)
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("temario.id"), nullable=True)
     nombre: Mapped[str] = mapped_column(String(255))
     descripcion: Mapped[Optional[str]] = mapped_column(Text)
@@ -63,6 +80,7 @@ class Temario(Base):
     pagina_inicio: Mapped[Optional[int]] = mapped_column(Integer, nullable=True) 
 
     # Relaciones existentes
+    libro: Mapped[Optional["Libro"]] = relationship(back_populates="temarios")
     subtemas: Mapped[List["Temario"]] = relationship("Temario", backref=backref("parent", remote_side=[id]))
     base_conocimiento: Mapped[List["BaseConocimiento"]] = relationship(back_populates="temario")
     preguntas_comunes: Mapped[List["PreguntaComun"]] = relationship(back_populates="temario")
@@ -84,14 +102,21 @@ class BaseConocimiento(Base):
     ref_fuente: Mapped[Optional[str]] = mapped_column(String(100))
     pagina: Mapped[Optional[int]] = mapped_column(Integer)
 
-    # Vector RAG (existente)
+    # Lista enlazada para navegación secuencial
+    chunk_anterior_id: Mapped[Optional[int]] = mapped_column(ForeignKey("base_conocimiento.id"), nullable=True)
+    chunk_siguiente_id: Mapped[Optional[int]] = mapped_column(ForeignKey("base_conocimiento.id"), nullable=True)
+
+    # Vector RAG + Full-Text Search
     embedding: Mapped[Optional[List[float]]] = mapped_column(Vector(1536))  # OpenAI text-embedding-3-small
+    # busqueda_texto es TSVECTOR (gestionado por trigger SQL, no se mapea en Python)
     metadata_info: Mapped[dict] = mapped_column(JSON, name="metadatos")
 
     temario: Mapped["Temario"] = relationship(back_populates="base_conocimiento")
     # Relación inversa para saber si este contenido es el último visto por alguien
     progreso_vinculado: Mapped[List["ProgresoAlumno"]] = relationship(back_populates="ultimo_contenido_visto")
-    ejercicio: Mapped["EjercicioCodigo"] = relationship(back_populates="contenido_base", uselist=False)
+    ejercicio: Mapped[Optional["EjercicioCodigo"]] = relationship(back_populates="contenido_base", uselist=False)
+    # Relación con citas de chat
+    citas: Mapped[List["ChatCitas"]] = relationship(back_populates="base_conocimiento")
 
 
 class PreguntaComun(Base):
@@ -162,6 +187,22 @@ class MensajeChat(Base):
     fecha: Mapped[datetime] = mapped_column(DateTime, server_default=func.now()) # Fecha en la que se envio el mensaje
 
     sesion: Mapped["SesionChat"] = relationship(back_populates="mensajes")
+    # Relación con citas  
+    citas: Mapped[List["ChatCitas"]] = relationship(back_populates="mensaje")
+
+
+class ChatCitas(Base):
+    """Tabla para rastrear qué chunks de base_conocimiento se usaron para responder un mensaje."""
+    __tablename__ = "chat_citas"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mensaje_id: Mapped[int] = mapped_column(ForeignKey("mensajes_chat.id"))
+    base_conocimiento_id: Mapped[int] = mapped_column(ForeignKey("base_conocimiento.id"))
+    score_similitud: Mapped[Optional[float]] = mapped_column(Float)
+
+    mensaje: Mapped["MensajeChat"] = relationship(back_populates="citas")
+    base_conocimiento: Mapped["BaseConocimiento"] = relationship(back_populates="citas")
+
 
 class EmbeddingCache(Base):
     __tablename__ = "embedding_cache"
@@ -219,6 +260,11 @@ class ProgresoAlumno(Base):
     ultimo_contenido_visto_id: Mapped[Optional[int]] = mapped_column(ForeignKey("base_conocimiento.id"), nullable=True)
     
     estado: Mapped[str] = mapped_column(String(20), default='en_progreso') # 'en_progreso', 'completado'
+    
+    # Campos para maestría socrática
+    nivel_comprension: Mapped[int] = mapped_column(Integer, default=0)  # 0-5
+    conceptos_debiles: Mapped[dict] = mapped_column(JSON, default=lambda: [])
+    
     fecha_actualizacion: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Relaciones para navegar desde el objeto
@@ -227,7 +273,7 @@ class ProgresoAlumno(Base):
     
     # Esta relación permite acceder al texto/código del último punto visto:
     # Ej: progreso.ultimo_contenido_visto.contenido -> "El código print() sirve para..."
-    ultimo_contenido_visto: Mapped["BaseConocimiento"] = relationship()
+    ultimo_contenido_visto: Mapped[Optional["BaseConocimiento"]] = relationship()
 
     # ... (Clase ProgresoAlumno y otras clases) ...
 
@@ -253,14 +299,13 @@ class Enrollment(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
-    temario_id: Mapped[int] = mapped_column(ForeignKey("temario.id"))
+    libro_id: Mapped[int] = mapped_column(ForeignKey("libros.id"))  # Cambiado de temario_id
     licencia_id: Mapped[Optional[int]] = mapped_column(ForeignKey("licencias.id"), nullable=True)
     fecha_matricula: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     estado: Mapped[str] = mapped_column(String(20), default='activo')  # activo, suspendido, completado
-    progreso_global: Mapped[float] = mapped_column(Float, default=0.0)  # 0.0 a 100.0
-
+    progreso_global: Mapped[float] = mapped_column(Float, default=0.0)    # Relaciones
     usuario: Mapped["Usuario"] = relationship(backref="enrollments")
-    temario: Mapped["Temario"] = relationship(backref="enrollments")
+    libro: Mapped["Libro"] = relationship(back_populates="enrollments")  # Cambiado de temario
     licencia: Mapped[Optional["Licencia"]] = relationship(back_populates="enrollments")
 
 

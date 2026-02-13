@@ -119,6 +119,13 @@ def fragmentar_texto(
             # Iniciar nuevo chunk con las sentencias de overlap
             chunk_actual = chunk_actual[inicio_overlap:]
             tokens_chunk_actual = sum(contar_tokens(s) for s in chunk_actual)
+            
+            # --- FIX: Evitar loop infinito si el overlap + sentencia actual sigue excediendo el tamaño ---
+            if tokens_chunk_actual + tokens_sentencia > chunk_size:
+                # Si ni con el overlap cabe, forzamos vaciar el chunk para que la sentencia se procese sola
+                # (en el siguiente ciclo caerá en el 'if tokens_sentencia > chunk_size')
+                chunk_actual = []
+                tokens_chunk_actual = 0
     
     # Agregar el último chunk si tiene contenido
     if chunk_actual:

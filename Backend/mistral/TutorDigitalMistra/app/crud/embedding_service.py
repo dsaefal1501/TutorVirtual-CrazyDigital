@@ -123,6 +123,10 @@ def _generate_embeddings_batch_api(textos: List[str]) -> List[List[float]]:
     return [r.embedding for r in results]
 
 
+from app.db.database import SessionLocal
+
+# ... (imports) ...
+
 def generar_embedding(db: Session, texto: str) -> List[float]:
     """
     Genera un embedding revisando caché primero.
@@ -130,6 +134,7 @@ def generar_embedding(db: Session, texto: str) -> List[float]:
     """
     text_hash = hashlib.sha256(texto.encode('utf-8')).hexdigest()
     
+    # 1. Lectura: Usamos la sesión actual (puede estar en transaccion)
     cached = db.query(EmbeddingCache).filter(
         EmbeddingCache.text_hash == text_hash
     ).first()
@@ -137,32 +142,39 @@ def generar_embedding(db: Session, texto: str) -> List[float]:
     if cached:
         return cached.embedding
     
+    # 2. Generación
     vector = _generate_embedding_api(texto)
     
+    # 3. Escritura en Caché: Usamos sesión AISLADA para no afectar la principal
+    # ni hacer commit de cosas pendientes del caller.
+    cache_db = SessionLocal()
     try:
-        db.add(EmbeddingCache(
+        cache_db.add(EmbeddingCache(
             text_hash=text_hash,
             original_text=texto[:2000],
             embedding=vector
         ))
-        db.commit()
-    except Exception:
-        db.rollback()
+        cache_db.commit()
+    except Exception as e:
+        # Si falla (ej: race condition, duplicado), no pasa nada, seguimos
+        cache_db.rollback()
+        # print(f"Cache write error: {e}")
+    finally:
+        cache_db.close()
     
     return vector
 
 
 def generar_embeddings_batch(db: Session, textos: List[str]) -> List[List[float]]:
     """
-    Genera embeddings en BATCH — mucho más rápido que uno por uno.
-    Revisa caché primero, solo envía a la API los que faltan.
-    Retorna una lista de vectores en el mismo orden que los textos de entrada.
+    Genera embeddings en BATCH. Revisa caché con sesión actual.
+    Guarda nuevos en caché con sesión aislada.
     """
     resultados = [None] * len(textos)
     indices_sin_cache = []
     textos_sin_cache = []
     
-    # 1. Buscar en caché
+    # 1. Buscar en caché (Sesión actual)
     for i, texto in enumerate(textos):
         text_hash = hashlib.sha256(texto.encode('utf-8')).hexdigest()
         cached = db.query(EmbeddingCache).filter(
@@ -180,37 +192,36 @@ def generar_embeddings_batch(db: Session, textos: List[str]) -> List[List[float]
     
     print(f"   [Embedding] {len(textos) - len(textos_sin_cache)} en caché, {len(textos_sin_cache)} por generar...")
     
-    # 2. Generar en batches
+    # 2. Generar en batches (API)
     todos_vectores = []
     for batch_start in range(0, len(textos_sin_cache), BATCH_SIZE):
         batch_textos = textos_sin_cache[batch_start:batch_start + BATCH_SIZE]
-        batch_num = (batch_start // BATCH_SIZE) + 1
-        total_batches = (len(textos_sin_cache) + BATCH_SIZE - 1) // BATCH_SIZE
-        print(f"   [Embedding] Batch {batch_num}/{total_batches} ({len(batch_textos)} textos)...")
-        
         vectores = _generate_embeddings_batch_api(batch_textos)
         todos_vectores.extend(vectores)
     
-    # 3. Asignar resultados y cachear
-    for j, idx_original in enumerate(indices_sin_cache):
-        vector = todos_vectores[j]
-        resultados[idx_original] = vector
-        
-        texto = textos[idx_original]
-        text_hash = hashlib.sha256(texto.encode('utf-8')).hexdigest()
-        try:
-            db.add(EmbeddingCache(
-                text_hash=text_hash,
-                original_text=texto[:2000],
-                embedding=vector
-            ))
-        except Exception:
-            pass
-    
+    # 3. Guardar en Caché (Sesión AISLADA)
+    cache_db = SessionLocal()
     try:
-        db.commit()
-    except Exception:
-        db.rollback()
+        for j, idx_original in enumerate(indices_sin_cache):
+            vector = todos_vectores[j]
+            resultados[idx_original] = vector
+            
+            texto = textos[idx_original]
+            text_hash = hashlib.sha256(texto.encode('utf-8')).hexdigest()
+            
+            # Verificar si ya existe en esta nueva sesión (race condition)
+            if not cache_db.query(EmbeddingCache).filter(EmbeddingCache.text_hash == text_hash).first():
+                cache_db.add(EmbeddingCache(
+                    text_hash=text_hash,
+                    original_text=texto[:2000],
+                    embedding=vector
+                ))
+        cache_db.commit()
+    except Exception as e:
+        cache_db.rollback()
+        print(f"   ⚠️ Error guardando caché batch: {e}")
+    finally:
+        cache_db.close()
     
-    print(f"   [Embedding] ✓ {len(textos_sin_cache)} embeddings generados y cacheados")
+    print(f"   [Embedding] ✓ {len(textos_sin_cache)} embeddings generados")
     return resultados

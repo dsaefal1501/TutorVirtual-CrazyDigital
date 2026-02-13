@@ -79,44 +79,50 @@ def test():
     return {"mensaje": "Test exitoso"}
 
 
-def _procesar_archivo_en_thread(file: UploadFile, account_id: str):
+def _procesar_archivo_en_thread(content: bytes, filename: str, account_id: str):
     """
     Wrapper para procesar archivo en un thread separado.
-    Crea su propia sesión DB para evitar problemas de thread-safety.
+    Recibe los bytes del archivo ya leídos para evitar problemas de I/O en threads.
     """
     db = SessionLocal()
     try:
-        return ingest_service.procesar_archivo_temario(db, file, account_id)
+        # Pasamos bytes y nombre de archivo al servicio
+        return ingest_service.procesar_archivo_temario(db, content, filename, account_id)
     finally:
         db.close()
 
 
+from fastapi import BackgroundTasks
+
 @app.post("/upload/syllabus")
 async def upload_syllabus(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...), 
     account_id: str = Query(..., description="ID de la cuenta enviado en la URL"),
 ):
     """
-    Sube el libro entero PDF. Usa chunking token-based (450 tokens, 70 overlap).
-    account_id se puede enviar en la URL (ej: /upload/syllabus?account_id=2)
+    Sube el libro entero PDF. 
+    Procesamiento en SEGUNDO PLANO (Background Task) para evitar timeouts.
     """
     if not file.filename.endswith(".pdf"):
          raise HTTPException(status_code=400, detail="Solo se aceptan PDFs por ahora")
          
     try:
-        resultado = await asyncio.to_thread(_procesar_archivo_en_thread, file, account_id)
+        # LEER CONTENIDO ANTES DE PASAR AL THREAD/BACKGROUND
+        content = await file.read()
+        filename = file.filename
         
-        if isinstance(resultado, dict) and "error" in resultado and resultado["error"]:
-             raise HTTPException(status_code=500, detail=resultado["error"])
-
+        # Encolar tarea en segundo plano
+        background_tasks.add_task(_procesar_archivo_en_thread, content, filename, account_id)
+        
         return {
-            "status": "success", 
-            "message": resultado.get("mensaje", "Procesamiento completado"),
-            "bloques_procesados": resultado.get("bloques", 0),
+            "status": "processing", 
+            "message": "Archivo recibido. El procesamiento ha comenzado en segundo plano. Puede tardar unos minutos.",
+            "filename": filename,
             "account_id": account_id
         }
     except Exception as e:
-        print(f"Error procesando archivo: {e}")
+        print(f"Error iniciando carga: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
