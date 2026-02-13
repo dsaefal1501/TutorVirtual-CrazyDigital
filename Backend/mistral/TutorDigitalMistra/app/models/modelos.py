@@ -23,6 +23,8 @@ class Licencia(Base):
 
     # Relación 1:N con Usuarios
     usuarios: Mapped[List["Usuario"]] = relationship(back_populates="licencia")
+    # Relación 1:N con Enrollments
+    enrollments: Mapped[List["Enrollment"]] = relationship(back_populates="licencia")
 
 
 class Usuario(Base):
@@ -252,12 +254,14 @@ class Enrollment(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
     temario_id: Mapped[int] = mapped_column(ForeignKey("temario.id"))
+    licencia_id: Mapped[Optional[int]] = mapped_column(ForeignKey("licencias.id"), nullable=True)
     fecha_matricula: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     estado: Mapped[str] = mapped_column(String(20), default='activo')  # activo, suspendido, completado
     progreso_global: Mapped[float] = mapped_column(Float, default=0.0)  # 0.0 a 100.0
 
     usuario: Mapped["Usuario"] = relationship(backref="enrollments")
     temario: Mapped["Temario"] = relationship(backref="enrollments")
+    licencia: Mapped[Optional["Licencia"]] = relationship(back_populates="enrollments")
 
 
 class Assessment(Base):

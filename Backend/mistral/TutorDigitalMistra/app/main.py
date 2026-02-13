@@ -20,7 +20,7 @@ modelos.Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="Tutor Digital API",
     description="API para interactuar con el Tutor Digital basado en RAG, OpenAI Embeddings y Mistral",
-    version="2.0.0",
+    version="0.2",
 )
 
 # Configuración de CORS
