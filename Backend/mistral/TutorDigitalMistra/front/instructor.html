@@ -1334,11 +1334,50 @@
             document.getElementById('uploadCard').scrollIntoView({ behavior: 'smooth' });
         }
 
-        function handleEliminar() {
+        async function handleEliminar() {
             document.getElementById('temarioDropdown').classList.remove('open');
-            if (confirm('¿Estás seguro de que quieres eliminar TODO el temario? Esta acción no se puede deshacer.')) {
-                showToast('Función de eliminación pendiente de implementar en el backend', true);
-                // TODO: Llamar a DELETE /syllabus cuando esté implementado
+
+            // Obtener libro_ids únicos del temario cargado
+            const libroIds = [...new Set(syllabusData.map(t => t.libro_id).filter(id => id != null))];
+
+            if (libroIds.length === 0) {
+                showToast('No hay libros para eliminar', true);
+                return;
+            }
+
+            if (!confirm('¿Estás seguro de que quieres eliminar TODO el temario y su libro? Esta acción no se puede deshacer.')) {
+                return;
+            }
+
+            // Feedback visual
+            const dropdownBtn = document.getElementById('temarioDropdownBtn');
+            const originalBtnHTML = dropdownBtn.innerHTML;
+            dropdownBtn.disabled = true;
+            dropdownBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Eliminando...';
+
+            try {
+                for (const libroId of libroIds) {
+                    const response = await fetch(`${API_URL}/syllabus/libro/${libroId}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || `Error ${response.status}`);
+                    }
+                }
+
+                showToast('✅ Libro y temario eliminados correctamente');
+                syllabusData = [];
+                // Volver al formulario de subida
+                showUploadForm();
+
+            } catch (error) {
+                showToast(`Error al eliminar: ${error.message}`, true);
+                console.error('Delete error:', error);
+            } finally {
+                dropdownBtn.disabled = false;
+                dropdownBtn.innerHTML = originalBtnHTML;
             }
         }
 

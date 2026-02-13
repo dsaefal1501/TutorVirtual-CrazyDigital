@@ -1,7 +1,10 @@
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select, func, and_
-from app.models.modelos import BaseConocimiento, MensajeChat, SesionChat, Usuario, Temario, EmbeddingCache, ProgresoAlumno
+from app.models.modelos import (
+    BaseConocimiento, MensajeChat, SesionChat, Usuario, Temario, EmbeddingCache, ProgresoAlumno,
+    Libro, ChatCitas, PreguntaComun, Test, IntentoAlumno, EjercicioCodigo, Enrollment, Assessment, TestScore
+)
 from app.schemas.schemas import PreguntaUsuario, RespuestaTutor, ConocimientoCreate
 from app.crud.embedding_service import generar_embedding  # OpenAI embeddings
 import os
@@ -658,7 +661,8 @@ def obtener_jerarquia_temario(db: Session) -> List[Dict]:
             "nombre": t.nombre,
             "nivel": t.nivel,
             "orden": t.orden,
-            "parent_id": t.parent_id
+            "parent_id": t.parent_id,
+            "libro_id": t.libro_id
         })
     
     resultado.sort(key=lambda x: x["id"])
@@ -681,3 +685,116 @@ def obtener_contenido_tema(db: Session, temario_id: int) -> Dict:
         "contenido": texto_completo,
         "bloques_count": len(bloques)
     }
+
+
+def eliminar_libro_completo(db: Session, libro_id: int) -> Dict:
+    """
+    Elimina un libro y TODOS sus datos asociados (temarios, base de conocimiento, etc.)
+    respetando el orden de las foreign keys.
+    """
+    # Verificar que el libro existe
+    libro = db.query(Libro).filter(Libro.id == libro_id).first()
+    if not libro:
+        return {"error": f"No se encontró el libro con ID {libro_id}"}
+
+    libro_titulo = libro.titulo
+
+    try:
+        # Obtener todos los temario IDs de este libro
+        temario_ids = [t.id for t in db.query(Temario.id).filter(Temario.libro_id == libro_id).all()]
+
+        if temario_ids:
+            # Obtener IDs dependientes
+            bc_ids = [bc.id for bc in db.query(BaseConocimiento.id).filter(
+                BaseConocimiento.temario_id.in_(temario_ids)
+            ).all()]
+
+            sesion_ids = [s.id for s in db.query(SesionChat.id).filter(
+                SesionChat.temario_id.in_(temario_ids)
+            ).all()]
+
+            test_ids = [t.id for t in db.query(Test.id).filter(
+                Test.temario_id.in_(temario_ids)
+            ).all()]
+
+            assessment_ids = [a.id for a in db.query(Assessment.id).filter(
+                Assessment.temario_id.in_(temario_ids)
+            ).all()]
+
+            # === ELIMINAR EN ORDEN (dependencias más profundas primero) ===
+
+            # 1. ChatCitas (depende de MensajeChat y BaseConocimiento)
+            if sesion_ids:
+                mensaje_ids = [m.id for m in db.query(MensajeChat.id).filter(
+                    MensajeChat.sesion_id.in_(sesion_ids)
+                ).all()]
+                if mensaje_ids:
+                    db.query(ChatCitas).filter(ChatCitas.mensaje_id.in_(mensaje_ids)).delete(synchronize_session=False)
+            if bc_ids:
+                db.query(ChatCitas).filter(ChatCitas.base_conocimiento_id.in_(bc_ids)).delete(synchronize_session=False)
+
+            # 2. MensajeChat
+            if sesion_ids:
+                db.query(MensajeChat).filter(MensajeChat.sesion_id.in_(sesion_ids)).delete(synchronize_session=False)
+
+            # 3. SesionChat
+            db.query(SesionChat).filter(SesionChat.temario_id.in_(temario_ids)).delete(synchronize_session=False)
+
+            # 4. TestScore
+            if assessment_ids:
+                db.query(TestScore).filter(TestScore.assessment_id.in_(assessment_ids)).delete(synchronize_session=False)
+
+            # 5. Assessment
+            db.query(Assessment).filter(Assessment.temario_id.in_(temario_ids)).delete(synchronize_session=False)
+
+            # 6. IntentoAlumno
+            if test_ids:
+                db.query(IntentoAlumno).filter(IntentoAlumno.test_id.in_(test_ids)).delete(synchronize_session=False)
+
+            # 7. Test
+            db.query(Test).filter(Test.temario_id.in_(temario_ids)).delete(synchronize_session=False)
+
+            # 8. ProgresoAlumno (depende de Temario y BaseConocimiento)
+            db.query(ProgresoAlumno).filter(ProgresoAlumno.temario_id.in_(temario_ids)).delete(synchronize_session=False)
+
+            # 9. EjercicioCodigo
+            if bc_ids:
+                db.query(EjercicioCodigo).filter(EjercicioCodigo.base_conocimiento_id.in_(bc_ids)).delete(synchronize_session=False)
+
+            # 10. BaseConocimiento (tiene auto-referencias, limpiarlas primero)
+            if bc_ids:
+                db.query(BaseConocimiento).filter(BaseConocimiento.id.in_(bc_ids)).update(
+                    {BaseConocimiento.chunk_anterior_id: None, BaseConocimiento.chunk_siguiente_id: None},
+                    synchronize_session=False
+                )
+                db.query(BaseConocimiento).filter(BaseConocimiento.temario_id.in_(temario_ids)).delete(synchronize_session=False)
+
+            # 11. PreguntaComun
+            db.query(PreguntaComun).filter(PreguntaComun.temario_id.in_(temario_ids)).delete(synchronize_session=False)
+
+            # 12. Temario (tiene auto-referencia parent_id, limpiar primero)
+            db.query(Temario).filter(Temario.libro_id == libro_id).update(
+                {Temario.parent_id: None}, synchronize_session=False
+            )
+            db.query(Temario).filter(Temario.libro_id == libro_id).delete(synchronize_session=False)
+
+        # 13. Enrollment
+        db.query(Enrollment).filter(Enrollment.libro_id == libro_id).delete(synchronize_session=False)
+
+        # 14. Libro
+        db.query(Libro).filter(Libro.id == libro_id).delete(synchronize_session=False)
+
+        db.commit()
+
+        print(f"[DELETE] Libro '{libro_titulo}' (ID={libro_id}) eliminado con {len(temario_ids)} temarios.")
+
+        return {
+            "mensaje": f"Libro '{libro_titulo}' y todos sus datos asociados han sido eliminados correctamente",
+            "libro_id": libro_id,
+            "temarios_eliminados": len(temario_ids)
+        }
+
+    except Exception as e:
+        db.rollback()
+        print(f"[DELETE ERROR] Error eliminando libro {libro_id}: {e}")
+        raise e
