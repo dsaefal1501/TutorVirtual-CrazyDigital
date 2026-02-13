@@ -674,26 +674,55 @@ function splitIntoSentences(text) {
 
 /**
  * Alimenta el buffer de texto conforme llega del streaming.
- * YA NO envía chunks parciales — solo acumula.
- * Todo se envía como UNA SOLA petición TTS en flushTTSSentenceBuffer().
+ * Estrategia HÍBRIDA: acumula texto y envía un chunk TTS cuando tiene
+ * suficiente material (3+ oraciones completas o 40+ palabras).
+ * Esto da baja latencia (primer audio rápido) con pocos chunks (voz consistente).
  */
 function feedTTSSentenceBuffer(chunk) {
     ttsSentenceBuffer += chunk;
-    // Solo acumular, no enviar nada todavía
+
+    // Buscar oraciones completas en el buffer (terminan en . ! ? seguido de espacio)
+    const sentenceEnders = /[.!?]\s/g;
+    let lastSentenceEnd = 0;
+    let sentenceCount = 0;
+    let match;
+
+    while ((match = sentenceEnders.exec(ttsSentenceBuffer)) !== null) {
+        lastSentenceEnd = match.index + match[0].length;
+        sentenceCount++;
+    }
+
+    // Enviar cuando tenemos 3+ oraciones completas O 40+ palabras en oraciones completas
+    if (lastSentenceEnd > 0) {
+        const readyPart = ttsSentenceBuffer.substring(0, lastSentenceEnd);
+        const wordCount = readyPart.trim().split(/\s+/).length;
+
+        if (sentenceCount >= 3 || wordCount >= 40) {
+            const rawText = readyPart.trim();
+            ttsSentenceBuffer = ttsSentenceBuffer.substring(lastSentenceEnd);
+
+            // Extraer emociones y limpiar
+            const emotionTags = extractEmotionSchedule(rawText);
+            const cleaned = cleanTextForTTS(rawText);
+            if (cleaned.length > 2) {
+                console.log(`[TTS] Chunk listo (${sentenceCount} oraciones, ${wordCount} palabras, ${emotionTags.length} emociones)`);
+                enqueueTTSChunk(cleaned, emotionTags);
+            }
+        }
+    }
 }
 
 /**
- * Envía TODO el texto acumulado como UNA SOLA petición TTS.
- * Esto garantiza voz 100% consistente (una sola generación = una sola voz).
+ * Envía lo que quede en el buffer como último chunk TTS.
+ * Se llama al final del streaming para no perder texto pendiente.
  */
 function flushTTSSentenceBuffer() {
     if (ttsSentenceBuffer.trim()) {
         const rawText = ttsSentenceBuffer.trim();
-        // Extraer etiquetas de emoción ANTES de limpiar el texto
         const emotionTags = extractEmotionSchedule(rawText);
         const cleaned = cleanTextForTTS(rawText);
         if (cleaned.length > 2) {
-            console.log(`[TTS] Enviando texto completo (${cleaned.length} chars) con ${emotionTags.length} emociones`);
+            console.log(`[TTS] Flush final (${cleaned.length} chars, ${emotionTags.length} emociones)`);
             enqueueTTSChunk(cleaned, emotionTags);
         }
         ttsSentenceBuffer = "";
