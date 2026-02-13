@@ -59,7 +59,7 @@ let isProcessing = false;
 let currentAudio = null;       // HTMLAudioElement activo
 let currentAudioUrl = null;    // URL.createObjectURL activo (para liberar memoria)
 let ttsEnabled = true;         // Toggle global de TTS
-let ttsSpeed = 1.35;            // Velocidad de TTS (0.5 - 5.0)
+let ttsSpeed = 1.35;            // Velocidad de TTS (0.25 - 3.0, edge-tts)
 
 // --- NUEVO: TTS Chunked Pipeline ---
 let ttsChunkQueue = [];         // Cola de chunks: { text, audioPromise, audioBlob, subtitleWords }
@@ -782,7 +782,7 @@ function enqueueTTSChunk(text, emotionTags = []) {
 async function fetchTTSAudio(text) {
     const formData = new FormData();
     formData.append('texto', text);
-    formData.append('voz', 'onyx');
+    formData.append('voz', 'alvaro');
     formData.append('speed', ttsSpeed.toString());
     // No enviamos instrucciones — el backend aplica las suyas fijas para mantener voz consistente
 
