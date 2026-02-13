@@ -368,8 +368,10 @@ async function handleConversationTurn(text) {
 }
 
 async function processBackendResponse(text, onChunkReceived) {
-    const isStream = streamToggle && streamToggle.checked;
-    const endpoint = isStream ? '/ask/stream' : '/ask';
+    // SIEMPRE usar streaming para que el texto se muestre al instante
+    // mientras el TTS genera audio en paralelo
+    const useStream = true;
+    const endpoint = useStream ? '/ask/stream' : '/ask';
 
     const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
@@ -379,7 +381,7 @@ async function processBackendResponse(text, onChunkReceived) {
 
     if (!response.ok) throw new Error("Error del servidor: " + response.status);
 
-    if (isStream) {
+    if (useStream) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
 
@@ -405,7 +407,6 @@ async function processBackendResponse(text, onChunkReceived) {
 
         if (result.length > 0) queueBotWords(result);
 
-        // Para TTS chunked con respuesta no-stream, dividir en oraciones directamente
         if (ttsEnabled && result.length > 0) {
             feedTTSSentenceBuffer(result);
         }
@@ -666,54 +667,74 @@ function splitIntoSentences(text) {
 
 
 // ── Configuración del pipeline chunked v2 ──
-const TTS_FIRST_CHUNK_SENTENCES = 1;    // Primer chunk: solo 1 oración (latencia mínima)
-const TTS_NORMAL_CHUNK_SENTENCES = 2;   // Chunks siguientes: 2 oraciones (menos cortes)
-const TTS_FIRST_CHUNK_MIN_WORDS = 4;    // Mínimo de palabras para disparar primer chunk
-const TTS_MAX_PREFETCH = 3;             // Cuántos chunks pre-generar en paralelo
+const TTS_FIRST_CHUNK_MIN_WORDS = 3;    // Mínimo de palabras para disparar primer chunk
+const TTS_WORD_FALLBACK = 25;           // Si acumula 25+ palabras sin punto, enviar igualmente
 let ttsAbortController = null;          // Para cancelar fetches en vuelo
 
 /**
  * Alimenta el buffer de texto conforme llega del streaming.
- * ESTRATEGIA v2: El primer chunk se envía con solo 1 oración completa
- * para que el usuario oiga audio lo antes posible. Los chunks siguientes
- * son más grandes (2 oraciones) para reducir micro-cortes.
+ * ESTRATEGIA v2 AGRESIVA:
+ *  - El PRIMER chunk se dispara con solo 1 oración completa (latencia mínima).
+ *  - Los chunks SIGUIENTES se disparan con 2 oraciones (menos micro-cortes).
+ *  - Si acumula 25+ palabras sin un finalizador de oración, lo envía igual
+ *    (para textos largos sin puntos).
+ *  - LOOP: drena todas las oraciones disponibles en cada llamada,
+ *    no solo la primera — así si el LLM envía varias frases de golpe,
+ *    se lanzan múltiples fetches TTS en paralelo inmediatamente.
  */
 function feedTTSSentenceBuffer(chunk) {
     ttsSentenceBuffer += chunk;
 
-    // Buscar oraciones completas en el buffer (terminan en . ! ? seguido de espacio o fin)
-    const sentenceEnders = /[.!?](?:\s|$)/g;
-    let lastSentenceEnd = 0;
-    let sentenceCount = 0;
-    let match;
+    // LOOP: seguir extrayendo chunks mientras haya oraciones completas
+    let keepGoing = true;
+    while (keepGoing) {
+        keepGoing = false;
 
-    while ((match = sentenceEnders.exec(ttsSentenceBuffer)) !== null) {
-        lastSentenceEnd = match.index + match[0].length;
-        sentenceCount++;
-    }
+        // Buscar oraciones completas (terminan en . ! ? seguido de espacio o fin)
+        const sentenceEnders = /[.!?](?:\s|$)/g;
+        let lastSentenceEnd = 0;
+        let sentenceCount = 0;
+        let match;
 
-    if (lastSentenceEnd === 0 || sentenceCount === 0) return;
+        while ((match = sentenceEnders.exec(ttsSentenceBuffer)) !== null) {
+            lastSentenceEnd = match.index + match[0].length;
+            sentenceCount++;
+        }
 
-    // Decidir cuántas oraciones necesitamos para disparar un chunk
-    const isFirstChunk = (ttsChunkIndex === 0);
-    const requiredSentences = isFirstChunk ? TTS_FIRST_CHUNK_SENTENCES : TTS_NORMAL_CHUNK_SENTENCES;
+        const isFirstChunk = (ttsChunkIndex === 0);
+        const requiredSentences = isFirstChunk ? 1 : 2;
 
-    if (sentenceCount >= requiredSentences) {
-        const readyPart = ttsSentenceBuffer.substring(0, lastSentenceEnd);
-        const wordCount = readyPart.trim().split(/\s+/).length;
+        if (sentenceCount >= requiredSentences && lastSentenceEnd > 0) {
+            // Hay suficientes oraciones completas
+            const readyPart = ttsSentenceBuffer.substring(0, lastSentenceEnd);
+            const wordCount = readyPart.trim().split(/\s+/).length;
 
-        // Para el primer chunk, verificar mínimo de palabras
-        if (isFirstChunk && wordCount < TTS_FIRST_CHUNK_MIN_WORDS) return;
+            if (isFirstChunk && wordCount < TTS_FIRST_CHUNK_MIN_WORDS) break;
 
-        const rawText = readyPart.trim();
-        ttsSentenceBuffer = ttsSentenceBuffer.substring(lastSentenceEnd);
+            const rawText = readyPart.trim();
+            ttsSentenceBuffer = ttsSentenceBuffer.substring(lastSentenceEnd);
 
-        // Extraer emociones y limpiar
-        const emotionTags = extractEmotionSchedule(rawText);
-        const cleaned = cleanTextForTTS(rawText);
-        if (cleaned.length > 2) {
-            console.log(`[TTS v2] Chunk ${ttsChunkIndex} listo (${sentenceCount} orac, ${wordCount} pal, 1er=${isFirstChunk})`);
-            enqueueTTSChunk(cleaned, emotionTags);
+            const emotionTags = extractEmotionSchedule(rawText);
+            const cleaned = cleanTextForTTS(rawText);
+            if (cleaned.length > 2) {
+                console.log(`[TTS v2] Chunk ${ttsChunkIndex} listo (${sentenceCount} orac, ${wordCount} pal, 1er=${isFirstChunk})`);
+                enqueueTTSChunk(cleaned, emotionTags);
+                keepGoing = true; // Puede haber más oraciones pendientes
+            }
+        } else {
+            // Fallback: si hay muchas palabras sin punto, enviar igualmente
+            const bufferWords = ttsSentenceBuffer.trim().split(/\s+/).length;
+            if (bufferWords >= TTS_WORD_FALLBACK && ttsSentenceBuffer.trim().length > 0) {
+                const rawText = ttsSentenceBuffer.trim();
+                ttsSentenceBuffer = "";
+
+                const emotionTags = extractEmotionSchedule(rawText);
+                const cleaned = cleanTextForTTS(rawText);
+                if (cleaned.length > 2) {
+                    console.log(`[TTS v2] Chunk ${ttsChunkIndex} (fallback ${bufferWords} pal sin punto)`);
+                    enqueueTTSChunk(cleaned, emotionTags);
+                }
+            }
         }
     }
 }
@@ -1008,4 +1029,217 @@ function stopTTS() {
 
     // Resetear el flag de abort para la próxima vez
     setTimeout(() => { ttsAborted = false; }, 50);
+}
+
+
+// ===========================================================================
+// INSTRUCTOR — Panel de subida de archivos
+// ===========================================================================
+
+(function initInstructorUpload() {
+    // Detectar si el usuario es instructor
+    const userRole = sessionStorage.getItem('userRole');
+    const isInstructor = (userRole === 'Instructor');
+
+    const uploadBtn = document.getElementById('instructor-upload-btn');
+    if (!uploadBtn) return;
+
+    // Solo mostrar botón si es instructor
+    if (!isInstructor) return;
+    uploadBtn.style.display = 'flex';
+    uploadBtn.style.pointerEvents = 'auto';
+
+    // Referencias DOM
+    const modalOverlay = document.getElementById('upload-modal-overlay');
+    const closeModalBtn = document.getElementById('close-upload-modal');
+    const uploadForm = document.getElementById('uploadForm');
+    const dropzone = document.getElementById('uploadDropzone');
+    const fileInput = document.getElementById('pdfFileInput');
+    const dropzoneContent = document.getElementById('dropzoneContent');
+    const dropzoneFile = document.getElementById('dropzoneFile');
+    const selectedFileName = document.getElementById('selectedFileName');
+    const selectedFileSize = document.getElementById('selectedFileSize');
+    const clearFileBtn = document.getElementById('clearFileBtn');
+    const submitBtn = document.getElementById('uploadBtn');
+    const progressContainer = document.getElementById('uploadProgress');
+    const progressBar = document.getElementById('uploadProgressBar');
+
+    // --- Abrir / Cerrar modal ---
+    uploadBtn.addEventListener('click', () => {
+        modalOverlay.style.display = 'flex';
+    });
+
+    closeModalBtn.addEventListener('click', () => {
+        modalOverlay.style.display = 'none';
+    });
+
+    // Cerrar al hacer clic fuera del modal
+    modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) {
+            modalOverlay.style.display = 'none';
+        }
+    });
+
+    // Cerrar con Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modalOverlay.style.display === 'flex') {
+            modalOverlay.style.display = 'none';
+        }
+    });
+
+    // --- Drag & Drop ---
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('drag-over');
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('drag-over');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('drag-over');
+        const files = e.dataTransfer.files;
+        if (files.length > 0 && files[0].type === 'application/pdf') {
+            fileInput.files = files;
+            showSelectedFile(files[0]);
+        } else {
+            showToast('Solo se aceptan archivos PDF', true);
+        }
+    });
+
+    // --- Selección de archivo ---
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) {
+            showSelectedFile(fileInput.files[0]);
+        }
+    });
+
+    function showSelectedFile(file) {
+        selectedFileName.textContent = file.name;
+        const sizeKB = (file.size / 1024).toFixed(1);
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+        selectedFileSize.textContent = file.size > 1024 * 1024 ? `${sizeMB} MB` : `${sizeKB} KB`;
+        dropzoneContent.style.display = 'none';
+        dropzoneFile.style.display = 'flex';
+    }
+
+    function clearFile() {
+        fileInput.value = '';
+        dropzoneContent.style.display = 'flex';
+        dropzoneFile.style.display = 'none';
+    }
+
+    clearFileBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        clearFile();
+    });
+
+    // --- Subida de archivo ---
+    uploadForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const accountId = document.getElementById('accountIdInput').value.trim();
+        const file = fileInput.files[0];
+        const originalBtnHTML = submitBtn.innerHTML;
+
+        if (!file) {
+            showToast('Por favor selecciona un archivo PDF', true);
+            return;
+        }
+        if (!accountId) {
+            showToast('Por favor ingresa un Account ID', true);
+            return;
+        }
+
+        try {
+            // Estado: procesando
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Procesando...';
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '30%';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch(`${API_URL}/upload/syllabus?account_id=${encodeURIComponent(accountId)}`, {
+                method: 'POST',
+                body: formData
+            });
+
+            progressBar.style.width = '80%';
+
+            const responseText = await response.text();
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (jsonErr) {
+                console.error("Respuesta no es JSON:", responseText);
+                throw new Error(response.ok ? 'Respuesta inesperada del servidor' : `Error ${response.status}: ${response.statusText}`);
+            }
+
+            if (!response.ok) {
+                let errorMsg = data.detail || data.message || `Error ${response.status}`;
+                if (typeof errorMsg === 'object') errorMsg = JSON.stringify(errorMsg);
+                throw new Error(errorMsg);
+            }
+
+            progressBar.style.width = '100%';
+
+            // Éxito: cerrar modal, resetear y notificar
+            setTimeout(() => {
+                modalOverlay.style.display = 'none';
+                uploadForm.reset();
+                clearFile();
+                progressContainer.style.display = 'none';
+                progressBar.style.width = '0%';
+            }, 500);
+
+            showToast(data.message || '✅ Archivo procesado exitosamente');
+
+            // Añadir confirmación al chat
+            addMessage(`✅ **Archivo subido exitosamente**\n\n${data.message || 'Procesado correctamente.'}`, 'bot');
+
+        } catch (error) {
+            showToast(`Error: ${error.message}`, true);
+            console.error('Upload error:', error);
+            addMessage(`❌ **Error en la subida**\n\n${error.message}`, 'bot');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnHTML;
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+                progressBar.style.width = '0%';
+            }, 1000);
+        }
+    });
+})();
+
+
+// --- Toast notification helper ---
+function showToast(message, isError = false) {
+    const container = document.getElementById('toast-container');
+    const msgEl = document.getElementById('toastMessage');
+    const iconEl = document.getElementById('toastIcon');
+
+    if (!container || !msgEl) return;
+
+    msgEl.textContent = message;
+    container.className = 'toast-notification' + (isError ? ' toast-error' : '');
+    iconEl.innerHTML = isError
+        ? '<i class="bi bi-exclamation-circle-fill"></i>'
+        : '<i class="bi bi-check-circle-fill"></i>';
+
+    container.style.display = 'flex';
+    container.style.animation = 'toastSlideIn 0.35s ease-out forwards';
+
+    // Auto-hide after 4s
+    clearTimeout(container._hideTimeout);
+    container._hideTimeout = setTimeout(() => {
+        container.style.animation = 'toastSlideOut 0.35s ease-in forwards';
+        setTimeout(() => { container.style.display = 'none'; }, 350);
+    }, 4000);
 }
