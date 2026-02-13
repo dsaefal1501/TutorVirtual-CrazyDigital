@@ -261,3 +261,21 @@ def get_syllabus_content(temario_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Error obteniendo contenido tema {temario_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/syllabus/libro/{libro_id}")
+def delete_libro(libro_id: int, db: Session = Depends(get_db)):
+    """
+    Elimina un libro completo y TODOS sus datos asociados 
+    (temarios, base de conocimiento, tests, sesiones, etc.).
+    """
+    try:
+        resultado = rag_service.eliminar_libro_completo(db, libro_id)
+        if "error" in resultado:
+            raise HTTPException(status_code=404, detail=resultado["error"])
+        return resultado
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error eliminando libro {libro_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
