@@ -15,7 +15,7 @@ from mistralai import Mistral
 
 # Importamos modelos y servicios
 from app.models.modelos import Temario, BaseConocimiento
-from app.crud.embedding_service import generar_embedding
+from app.crud.embedding_service import generar_embedding, generar_embeddings_batch
 from app.crud.chunking_service import procesar_texto_tema
 
 api_key = os.getenv("MISTRAL_API_KEY")
@@ -246,10 +246,13 @@ def procesar_archivo_temario(db: Session, file: UploadFile, account_id: str):
                 resultados.append(res)
                 print(f"   [OK] {res['nombre']} ({len(res['bloques'])} fragmentos)")
 
-    # 6. Guardar Bloques y Generar Embeddings (OpenAI)
-    print(" -> Insertando fragmentos y generando embeddings (OpenAI text-embedding-3-small)...")
+    # 6. Guardar Bloques y Generar Embeddings en BATCH (OpenAI)
+    print(" -> Insertando fragmentos y generando embeddings en BATCH (OpenAI text-embedding-3-small)...")
     count_bloques = 0
     resultados.sort(key=lambda x: x["pag_inicio"])
+    
+    # Preparar todos los textos para embedding en batch
+    todos_bloques = []  # Lista de (resultado, bloque, posicion, txt_vector)
     
     for res in resultados:
         if res.get("parent_nombre"):
@@ -258,32 +261,35 @@ def procesar_archivo_temario(db: Session, file: UploadFile, account_id: str):
             posicion = f"{res['nombre']} (nivel {res['nivel']}, orden {res['orden']})"
         
         for bloque in res["bloques"]:
-            contenido = bloque["contenido"]
-            tipo = bloque["tipo"]
-            orden_bloque = bloque["orden"]
-            
-            # Metadatos completos
-            meta = {
-                **bloque["metadata"],
-                "parent_id": res.get("parent_id"),
-            }
-            
-            # Embedding con contexto jerárquico (OpenAI)
-            txt_vector = f"[{posicion}]: {contenido}"
-            vector = generar_embedding(db, txt_vector)
-            
-            nuevo_bk = BaseConocimiento(
-                temario_id=res["tema_id"],
-                contenido=contenido,
-                tipo_contenido=tipo,
-                orden_aparicion=orden_bloque,
-                pagina=res["pag_inicio"],
-                ref_fuente=f"Pag {res['pag_inicio']}",
-                embedding=vector,
-                metadata_info=meta
-            )
-            db.add(nuevo_bk)
-            count_bloques += 1
+            txt_vector = f"[{posicion}]: {bloque['contenido']}"
+            todos_bloques.append((res, bloque, posicion, txt_vector))
+    
+    total_fragmentos = len(todos_bloques)
+    print(f"   Total fragmentos a indexar: {total_fragmentos}")
+    
+    # Generar TODOS los embeddings en batch
+    textos_para_embedding = [item[3] for item in todos_bloques]
+    vectores = generar_embeddings_batch(db, textos_para_embedding)
+    
+    # Insertar en base_conocimiento con los vectores ya generados
+    for i, (res, bloque, posicion, txt_vector) in enumerate(todos_bloques):
+        meta = {
+            **bloque["metadata"],
+            "parent_id": res.get("parent_id"),
+        }
+        
+        nuevo_bk = BaseConocimiento(
+            temario_id=res["tema_id"],
+            contenido=bloque["contenido"],
+            tipo_contenido=bloque["tipo"],
+            orden_aparicion=bloque["orden"],
+            pagina=res["pag_inicio"],
+            ref_fuente=f"Pag {res['pag_inicio']}",
+            embedding=vectores[i],
+            metadata_info=meta
+        )
+        db.add(nuevo_bk)
+        count_bloques += 1
             
     db.commit()
     print(f"=== INGESTA FINALIZADA: {count_bloques} fragmentos indexados ===")

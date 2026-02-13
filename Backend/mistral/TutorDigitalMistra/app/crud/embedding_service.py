@@ -80,15 +80,16 @@ def retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0):
 # Funciones de Embedding
 # ============================================================================
 
+BATCH_SIZE = 20  # Cuántos textos enviar por llamada API (máx recomendado ~20)
+
 @retry_with_backoff()
 def _generate_embedding_api(texto: str) -> List[float]:
-    """Llama a la API de OpenAI para generar un embedding."""
+    """Llama a la API de OpenAI para generar un embedding (1 texto)."""
     if not openai_client:
         return [0.0] * EMBEDDING_DIM
     
     rate_limiter.wait_if_needed("embed")
     
-    # Limpiar texto (OpenAI recomienda reemplazar newlines)
     texto_limpio = texto.replace("\n", " ").strip()
     if not texto_limpio:
         return [0.0] * EMBEDDING_DIM
@@ -100,6 +101,28 @@ def _generate_embedding_api(texto: str) -> List[float]:
     return response.data[0].embedding
 
 
+@retry_with_backoff()
+def _generate_embeddings_batch_api(textos: List[str]) -> List[List[float]]:
+    """Llama a la API de OpenAI para generar embeddings en BATCH (múltiples textos)."""
+    if not openai_client:
+        return [[0.0] * EMBEDDING_DIM for _ in textos]
+    
+    rate_limiter.wait_if_needed("embed")
+    
+    textos_limpios = [t.replace("\n", " ").strip() for t in textos]
+    # Reemplazar vacíos por un espacio para evitar errores
+    textos_limpios = [t if t else " " for t in textos_limpios]
+    
+    response = openai_client.embeddings.create(
+        model=EMBEDDING_DEPLOYMENT,
+        input=textos_limpios
+    )
+    
+    # Ordenar por índice (la API puede devolver desordenado)
+    results = sorted(response.data, key=lambda x: x.index)
+    return [r.embedding for r in results]
+
+
 def generar_embedding(db: Session, texto: str) -> List[float]:
     """
     Genera un embedding revisando caché primero.
@@ -107,7 +130,6 @@ def generar_embedding(db: Session, texto: str) -> List[float]:
     """
     text_hash = hashlib.sha256(texto.encode('utf-8')).hexdigest()
     
-    # Buscar en caché
     cached = db.query(EmbeddingCache).filter(
         EmbeddingCache.text_hash == text_hash
     ).first()
@@ -115,14 +137,12 @@ def generar_embedding(db: Session, texto: str) -> List[float]:
     if cached:
         return cached.embedding
     
-    # Generar nuevo embedding via API
     vector = _generate_embedding_api(texto)
     
-    # Cachear resultado
     try:
         db.add(EmbeddingCache(
             text_hash=text_hash,
-            original_text=texto[:2000],  # Limitar texto almacenado
+            original_text=texto[:2000],
             embedding=vector
         ))
         db.commit()
@@ -130,3 +150,67 @@ def generar_embedding(db: Session, texto: str) -> List[float]:
         db.rollback()
     
     return vector
+
+
+def generar_embeddings_batch(db: Session, textos: List[str]) -> List[List[float]]:
+    """
+    Genera embeddings en BATCH — mucho más rápido que uno por uno.
+    Revisa caché primero, solo envía a la API los que faltan.
+    Retorna una lista de vectores en el mismo orden que los textos de entrada.
+    """
+    resultados = [None] * len(textos)
+    indices_sin_cache = []
+    textos_sin_cache = []
+    
+    # 1. Buscar en caché
+    for i, texto in enumerate(textos):
+        text_hash = hashlib.sha256(texto.encode('utf-8')).hexdigest()
+        cached = db.query(EmbeddingCache).filter(
+            EmbeddingCache.text_hash == text_hash
+        ).first()
+        if cached:
+            resultados[i] = cached.embedding
+        else:
+            indices_sin_cache.append(i)
+            textos_sin_cache.append(texto)
+    
+    if not textos_sin_cache:
+        print(f"   [Cache] Todos los {len(textos)} embeddings estaban en caché ✓")
+        return resultados
+    
+    print(f"   [Embedding] {len(textos) - len(textos_sin_cache)} en caché, {len(textos_sin_cache)} por generar...")
+    
+    # 2. Generar en batches
+    todos_vectores = []
+    for batch_start in range(0, len(textos_sin_cache), BATCH_SIZE):
+        batch_textos = textos_sin_cache[batch_start:batch_start + BATCH_SIZE]
+        batch_num = (batch_start // BATCH_SIZE) + 1
+        total_batches = (len(textos_sin_cache) + BATCH_SIZE - 1) // BATCH_SIZE
+        print(f"   [Embedding] Batch {batch_num}/{total_batches} ({len(batch_textos)} textos)...")
+        
+        vectores = _generate_embeddings_batch_api(batch_textos)
+        todos_vectores.extend(vectores)
+    
+    # 3. Asignar resultados y cachear
+    for j, idx_original in enumerate(indices_sin_cache):
+        vector = todos_vectores[j]
+        resultados[idx_original] = vector
+        
+        texto = textos[idx_original]
+        text_hash = hashlib.sha256(texto.encode('utf-8')).hexdigest()
+        try:
+            db.add(EmbeddingCache(
+                text_hash=text_hash,
+                original_text=texto[:2000],
+                embedding=vector
+            ))
+        except Exception:
+            pass
+    
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+    
+    print(f"   [Embedding] ✓ {len(textos_sin_cache)} embeddings generados y cacheados")
+    return resultados

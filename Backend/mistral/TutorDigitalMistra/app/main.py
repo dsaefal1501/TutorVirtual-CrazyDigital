@@ -1,8 +1,9 @@
+import asyncio
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from app.db.database import get_db, engine
+from app.db.database import get_db, engine, SessionLocal
 from app.models import modelos
 from app.schemas.schemas import (
     PreguntaUsuario, RespuestaTutor, 
@@ -77,11 +78,23 @@ def sync_knowledge(db: Session = Depends(get_db)):
 def test():
     return {"mensaje": "Test exitoso"}
 
+
+def _procesar_archivo_en_thread(file: UploadFile, account_id: str):
+    """
+    Wrapper para procesar archivo en un thread separado.
+    Crea su propia sesión DB para evitar problemas de thread-safety.
+    """
+    db = SessionLocal()
+    try:
+        return ingest_service.procesar_archivo_temario(db, file, account_id)
+    finally:
+        db.close()
+
+
 @app.post("/upload/syllabus")
 async def upload_syllabus(
     file: UploadFile = File(...), 
     account_id: str = Query(..., description="ID de la cuenta enviado en la URL"),
-    db: Session = Depends(get_db)
 ):
     """
     Sube el libro entero PDF. Usa chunking token-based (450 tokens, 70 overlap).
@@ -91,7 +104,7 @@ async def upload_syllabus(
          raise HTTPException(status_code=400, detail="Solo se aceptan PDFs por ahora")
          
     try:
-        resultado = ingest_service.procesar_archivo_temario(db, file, account_id)
+        resultado = await asyncio.to_thread(_procesar_archivo_en_thread, file, account_id)
         
         if isinstance(resultado, dict) and "error" in resultado and resultado["error"]:
              raise HTTPException(status_code=500, detail=resultado["error"])
