@@ -427,14 +427,35 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
     
     # --- RAMA C: MODO RAG (Resolver dudas con contenido del libro) ---
     else:
-        # 1. Buscar los fragmentos más relevantes del libro
+        # 1. Búsqueda Híbrida (Vector + Full-Text) usando función SQL
         vector = generar_embedding(db, pregunta.texto)
-        docs = db.execute(
-            select(BaseConocimiento).order_by(
-                BaseConocimiento.embedding.cosine_distance(vector)
-            ).limit(5)  # 5 fragmentos para más contexto
-        ).scalars().all()
         
+        # Llamar a la función SQL 'buscar_contenido_hibrido'
+        # Retorna: id, contenido, pagina, temario_id, score
+        docs_raw = db.execute(
+            text("SELECT * FROM buscar_contenido_hibrido(:q_text, :q_emb, :thresh, :limit, :libro_id)"),
+            {
+                "q_text": pregunta.texto,
+                "q_emb": str(vector),  # pgvector espera string '[0.1, 0.2...]'
+                "thresh": 0.3,
+                "limit": 5,
+                "libro_id": None # Opcional: filtrar por libro si se desea
+            }
+        ).all()
+        
+        # Convertir a objetos o diccionarios usables
+        docs = []
+        for row in docs_raw:
+            bk = BaseConocimiento(
+                id=row.id,
+                contenido=row.contenido,
+                pagina=row.pagina,
+                temario_id=row.temario_id
+            )
+            # Nota: score no está en el modelo ORM, lo asignamos dinámicamente
+            bk.score_similitud = row.score 
+            docs.append(bk)
+            
         # 2. Construir contexto enriquecido con jerarquía
         contexto_str = _construir_contexto_enriquecido(db, docs)
         fuentes = [f"Pag {d.pagina}" for d in docs]
@@ -444,11 +465,8 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
         
         # 4. Construir mensajes con el prompt completo de Pablo
         msgs = [{"role": "system", "content": PABLO_SYSTEM_PROMPT}]
-        
-        # Inyectar historial
         msgs.extend(historial)
         
-        # Mensaje del usuario con contexto del libro
         user_msg = (
             f"CONTEXTO DEL LIBRO (usa este contenido LITERAL para responder):\n"
             f"{contexto_str}\n\n"
@@ -464,9 +482,25 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
         else:
             respuesta_texto = "[Neutral] Modo simulación (Sin API Key configurada)."
 
-    # Guardar historial de esta interacción
-    db.add(MensajeChat(sesion_id=sesion.id, rol="user", texto=pregunta.texto))
-    db.add(MensajeChat(sesion_id=sesion.id, rol="assistant", texto=respuesta_texto))
+    # Guardar historial y citas
+    msg_user = MensajeChat(sesion_id=sesion.id, rol="user", texto=pregunta.texto)
+    db.add(msg_user)
+    
+    msg_bot = MensajeChat(sesion_id=sesion.id, rol="assistant", texto=respuesta_texto)
+    db.add(msg_bot)
+    db.flush() # Obtener ID del mensaje
+    
+    # Guardar Citas (Evidencia)
+    if docs:
+        from app.models.modelos import ChatCitas
+        for d in docs:
+            cita = ChatCitas(
+                mensaje_id=msg_bot.id,
+                base_conocimiento_id=d.id,
+                score_similitud=getattr(d, "score_similitud", 0.0)
+            )
+            db.add(cita)
+            
     db.commit()
 
     return RespuestaTutor(sesion_id=sesion.id, respuesta=respuesta_texto, fuentes=fuentes)
