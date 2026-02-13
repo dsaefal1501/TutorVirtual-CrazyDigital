@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>CrazyTeacher | Panel Instructor</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+    <style>
+        :root {
+            --sky-100: #dceefb;
+            --sky-200: #b6dcf9;
+            --sky-300: #8ec8f6;
+            --sky-400: #6fb5f0;
+            --sky-500: #5a9ee0;
+            --sky-600: #4885c7;
+            --sky-700: #3a6faa;
+            --bg-start: #d6ecfd;
+            --bg-end: #aad4f9;
+            --text-main: #3b5068;
+            --text-light: #7e99b0;
+            --glass-bg: rgba(255, 255, 255, 0.60);
+            --glass-border: rgba(255, 255, 255, 0.75);
+            --shadow-card: 0 12px 40px rgba(60, 120, 190, 0.22);
+            --green-400: #4ade80;
+            --green-500: #22c55e;
+            --green-600: #16a34a;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        body,
+        html {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            color: var(--text-main);
+        }
+
+        /* ---- Animated Background ---- */
+        .bg-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(160deg, var(--bg-start) 0%, var(--bg-end) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .ambient-shape {
+            position: absolute;
+            filter: blur(100px);
+            z-index: 0;
+            opacity: 0.45;
+            animation: floatShape 12s infinite ease-in-out;
+        }
+
+        .shape-1 {
+            top: -10%;
+            left: -8%;
+            width: 500px;
+            height: 500px;
+            background: #c3ddf5;
+            border-radius: 50%;
+        }
+
+        .shape-2 {
+            bottom: -12%;
+            right: -5%;
+            width: 420px;
+            height: 420px;
+            background: #99c9f7;
+            border-radius: 50%;
+            animation-delay: -6s;
+        }
+
+        .shape-3 {
+            top: 40%;
+            left: 60%;
+            width: 300px;
+            height: 300px;
+            background: #b8e0c8;
+            border-radius: 50%;
+            animation-delay: -3s;
+        }
+
+        @keyframes floatShape {
+
+            0%,
+            100% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            50% {
+                transform: translate(25px, 35px) scale(1.05);
+            }
+        }
+
+        /* ---- Layout ---- */
+        .dashboard {
+            position: relative;
+            z-index: 10;
+            width: 92%;
+            max-width: 520px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            animation: pageIn 0.5s ease-out;
+        }
+
+        @keyframes pageIn {
+            from {
+                opacity: 0;
+                transform: translateY(25px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ---- Header ---- */
+        .dash-header {
+            text-align: center;
+            padding: 0 8px;
+        }
+
+        .dash-header .logo {
+            font-size: 2.2rem;
+            margin-bottom: 2px;
+            display: inline-block;
+            transition: transform 0.3s;
+        }
+
+        .dash-header:hover .logo {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0% {
+                transform: rotate(0);
+            }
+
+            25% {
+                transform: rotate(-10deg);
+            }
+
+            75% {
+                transform: rotate(10deg);
+            }
+
+            100% {
+                transform: rotate(0);
+            }
+        }
+
+        .dash-header h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -0.5px;
+        }
+
+        .dash-header .subtitle {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-top: 2px;
+        }
+
+        .role-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--green-600);
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 4px 14px;
+            border-radius: 50px;
+            margin-top: 8px;
+        }
+
+        /* ---- Glass Card ---- */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1.5px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: var(--shadow-card);
+            overflow: hidden;
+        }
+
+        .card-title {
+            padding: 20px 24px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .card-title i {
+            font-size: 1.2rem;
+            color: var(--sky-600);
+        }
+
+        .card-body-inner {
+            padding: 18px 24px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* ---- Form Fields ---- */
+        .field-label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 5px;
+            margin-left: 4px;
+            display: block;
+        }
+
+        .field-input {
+            width: 100%;
+            padding: 12px 18px;
+            border-radius: 14px;
+            border: 1.5px solid rgba(200, 220, 240, 0.55);
+            background: rgba(255, 255, 255, 0.80);
+            font-size: 0.92rem;
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            transition: border-color 0.25s, box-shadow 0.25s;
+        }
+
+        .field-input::placeholder {
+            color: var(--text-light);
+        }
+
+        .field-input:focus {
+            border-color: var(--sky-400);
+            box-shadow: 0 0 0 3px rgba(111, 181, 240, 0.18);
+        }
+
+        /* ---- Dropzone ---- */
+        .dropzone {
+            border: 2.5px dashed rgba(111, 181, 240, 0.45);
+            border-radius: 18px;
+            padding: 32px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(220, 238, 251, 0.25);
+        }
+
+        .dropzone:hover {
+            border-color: var(--sky-400);
+            background: rgba(220, 238, 251, 0.45);
+            transform: scale(1.01);
+        }
+
+        .dropzone.drag-over {
+            border-color: var(--sky-500);
+            background: rgba(174, 212, 249, 0.35);
+            box-shadow: inset 0 0 24px rgba(111, 181, 240, 0.12);
+            transform: scale(1.02);
+        }
+
+        .dropzone-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dropzone-empty i {
+            font-size: 2.4rem;
+            color: var(--sky-400);
+        }
+
+        .dropzone-empty .dz-title {
+            font-weight: 600;
+            color: var(--text-main);
+            font-size: 0.95rem;
+        }
+
+        .dropzone-empty .dz-sub {
+            color: var(--text-light);
+            font-size: 0.82rem;
+        }
+
+        .dropzone-selected {
+            display: none;
+            align-items: center;
+            gap: 14px;
+            text-align: left;
+            padding: 4px 0;
+        }
+
+        .dropzone-selected .file-icon {
+            font-size: 2rem;
+            color: #e74c3c;
+        }
+
+        .dropzone-selected .file-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-main);
+        }
+
+        .dropzone-selected .file-size {
+            font-size: 0.78rem;
+            color: var(--text-light);
+        }
+
+        .btn-clear-file {
+            background: none;
+            border: none;
+            color: #e74c3c;
+            font-size: 1.1rem;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .btn-clear-file:hover {
+            background: rgba(231, 76, 60, 0.1);
+        }
+
+        /* ---- Buttons ---- */
+        .btn-primary-custom {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(135deg, var(--sky-400), var(--sky-600));
+            color: white;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            box-shadow: 0 4px 14px rgba(60, 130, 200, 0.30);
+            transition: all 0.25s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(60, 130, 200, 0.40);
+        }
+
+        .btn-primary-custom:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary-custom:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-test-tutor {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid var(--sky-400);
+            border-radius: 50px;
+            background: rgba(255, 255, 255, 0.55);
+            color: var(--sky-600);
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.25s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-test-tutor:hover {
+            background: rgba(111, 181, 240, 0.12);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 14px rgba(60, 130, 200, 0.15);
+        }
+
+        .btn-test-tutor:active {
+            transform: translateY(0);
+        }
+
+        /* ---- Progress ---- */
+        .progress-bar-container {
+            width: 100%;
+            height: 6px;
+            background: rgba(200, 220, 240, 0.35);
+            border-radius: 10px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--sky-400), var(--sky-600));
+            border-radius: 10px;
+            width: 0%;
+            transition: width 0.5s ease;
+            animation: pulseProg 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulseProg {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.65;
+            }
+        }
+
+        /* ---- Logout ---- */
+        .btn-logout {
+            background: none;
+            border: none;
+            color: var(--text-light);
+            font-size: 0.82rem;
+            cursor: pointer;
+            font-weight: 500;
+            text-align: center;
+            width: 100%;
+            padding: 6px;
+            transition: color 0.2s;
+        }
+
+        .btn-logout:hover {
+            color: #e74c3c;
+        }
+
+        /* ---- Toast ---- */
+        .toast-msg {
+            position: fixed;
+            bottom: 28px;
+            left: 50%;
+            transform: translateX(-50%) translateY(30px);
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            border: 1.5px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50px;
+            padding: 12px 24px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 8px 32px rgba(60, 120, 190, 0.22);
+            z-index: 3000;
+            font-size: 0.88rem;
+            font-weight: 500;
+            color: var(--text-main);
+            animation: toastIn 0.35s ease-out forwards;
+        }
+
+        .toast-msg.is-error {
+            border-color: rgba(231, 76, 60, 0.3);
+        }
+
+        .toast-msg.is-error .toast-ico {
+            color: #e74c3c;
+        }
+
+        .toast-ico {
+            font-size: 1.15rem;
+            color: #2ecc71;
+        }
+
+        @keyframes toastIn {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        @keyframes toastOut {
+            from {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+
+            to {
+                opacity: 0;
+                transform: translateX(-50%) translateY(30px);
+            }
+        }
+
+        /* ---- Responsive ---- */
+        @media (max-width: 500px) {
+            .dashboard {
+                width: 95%;
+                max-width: none;
+            }
+
+            .card-body-inner {
+                padding: 14px 18px 20px;
+            }
+
+            .dropzone {
+                padding: 24px 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="bg-container">
+        <div class="ambient-shape shape-1"></div>
+        <div class="ambient-shape shape-2"></div>
+        <div class="ambient-shape shape-3"></div>
+
+        <div class="dashboard">
+            <!-- Header -->
+            <div class="dash-header">
+                <div class="logo">👓</div>
+                <h1>CrazyTeacher</h1>
+                <div class="subtitle">Panel del Instructor</div>
+                <div class="role-badge">
+                    <i class="bi bi-shield-check"></i> Instructor
+                </div>
+            </div>
+
+            <!-- Upload Card -->
+            <div class="glass-card">
+                <div class="card-title">
+                    <i class="bi bi-file-earmark-pdf-fill"></i>
+                    Subir Temario
+                </div>
+
+                <form id="uploadForm" class="card-body-inner">
+                    <!-- Account ID -->
+                    <div>
+                        <label for="accountIdInput" class="field-label">
+                            <i class="bi bi-building me-1"></i> Account ID
+                        </label>
+                        <input type="text" class="field-input" id="accountIdInput" placeholder="UUID de la empresa"
+                            required>
+                    </div>
+
+                    <!-- Dropzone -->
+                    <div class="dropzone" id="dropzone">
+                        <input type="file" id="fileInput" accept=".pdf" required hidden>
+                        <div class="dropzone-empty" id="dzEmpty">
+                            <i class="bi bi-cloud-arrow-up"></i>
+                            <div class="dz-title">Arrastra tu PDF aquí</div>
+                            <div class="dz-sub">o haz clic para seleccionar</div>
+                        </div>
+                        <div class="dropzone-selected" id="dzSelected">
+                            <i class="bi bi-file-earmark-pdf-fill file-icon"></i>
+                            <div style="flex: 1;">
+                                <div class="file-name" id="fileName">archivo.pdf</div>
+                                <div class="file-size" id="fileSize">0 KB</div>
+                            </div>
+                            <button type="button" class="btn-clear-file" id="clearFileBtn" title="Quitar archivo">
+                                <i class="bi bi-x-circle-fill"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Upload Button -->
+                    <button type="submit" class="btn-primary-custom" id="uploadBtn">
+                        <i class="bi bi-cloud-upload"></i> Subir y Procesar
+                    </button>
+
+                    <!-- Progress -->
+                    <div class="progress-bar-container" id="progressContainer">
+                        <div class="progress-bar-fill" id="progressBar"></div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Test Tutor Button -->
+            <button class="btn-test-tutor" id="testTutorBtn">
+                <i class="bi bi-play-circle"></i> Testear Tutor Virtual
+            </button>
+
+            <!-- Logout -->
+            <button class="btn-logout" id="logoutBtn">
+                <i class="bi bi-box-arrow-left me-1"></i> Cerrar sesión
+            </button>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast-msg" id="toast">
+        <div class="toast-ico" id="toastIco"><i class="bi bi-check-circle-fill"></i></div>
+        <span id="toastMsg">OK</span>
+    </div>
+
+    <script>
+        const API_URL = 'http://192.168.18.6:8000';
+
+        // ---- DOM refs ----
+        const uploadForm = document.getElementById('uploadForm');
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const dzEmpty = document.getElementById('dzEmpty');
+        const dzSelected = document.getElementById('dzSelected');
+        const fileNameEl = document.getElementById('fileName');
+        const fileSizeEl = document.getElementById('fileSize');
+        const clearFileBtn = document.getElementById('clearFileBtn');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+
+        // ---- Drag & Drop ----
+        dropzone.addEventListener('click', () => fileInput.click());
+
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('drag-over');
+        });
+
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].name.toLowerCase().endsWith('.pdf')) {
+                fileInput.files = files;
+                showFile(files[0]);
+            } else {
+                showToast('Solo se aceptan archivos PDF', true);
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) showFile(fileInput.files[0]);
+        });
+
+        function showFile(file) {
+            fileNameEl.textContent = file.name;
+            const kb = (file.size / 1024).toFixed(1);
+            const mb = (file.size / (1024 * 1024)).toFixed(1);
+            fileSizeEl.textContent = file.size > 1024 * 1024 ? `${mb} MB` : `${kb} KB`;
+            dzEmpty.style.display = 'none';
+            dzSelected.style.display = 'flex';
+        }
+
+        function clearFile() {
+            fileInput.value = '';
+            dzEmpty.style.display = 'flex';
+            dzSelected.style.display = 'none';
+        }
+
+        clearFileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            clearFile();
+        });
+
+        // ---- Upload ----
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const accountId = document.getElementById('accountIdInput').value.trim();
+            const file = fileInput.files[0];
+            const originalHTML = uploadBtn.innerHTML;
+
+            if (!file) { showToast('Selecciona un archivo PDF', true); return; }
+            if (!accountId) { showToast('Ingresa un Account ID', true); return; }
+
+            try {
+                uploadBtn.disabled = true;
+                uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Procesando...';
+                progressContainer.style.display = 'block';
+                progressBar.style.width = '25%';
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch(`${API_URL}/upload/syllabus?account_id=${encodeURIComponent(accountId)}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                progressBar.style.width = '75%';
+
+                const responseText = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (_) {
+                    throw new Error(response.ok ? 'Respuesta inesperada del servidor' : `Error ${response.status}`);
+                }
+
+                if (!response.ok) {
+                    let msg = data.detail || data.message || `Error ${response.status}`;
+                    if (typeof msg === 'object') msg = JSON.stringify(msg);
+                    throw new Error(msg);
+                }
+
+                progressBar.style.width = '100%';
+
+                setTimeout(() => {
+                    uploadForm.reset();
+                    clearFile();
+                    progressContainer.style.display = 'none';
+                    progressBar.style.width = '0%';
+                }, 800);
+
+                showToast(data.message || '✅ Archivo procesado exitosamente');
+
+            } catch (error) {
+                showToast(`Error: ${error.message}`, true);
+                console.error('Upload error:', error);
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = originalHTML;
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    progressBar.style.width = '0%';
+                }, 1200);
+            }
+        });
+
+        // ---- Test Tutor ----
+        document.getElementById('testTutorBtn').addEventListener('click', () => {
+            window.location.href = 'index.html';
+        });
+
+        // ---- Logout ----
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            sessionStorage.removeItem('userRole');
+            window.location.href = 'login.html';
+        });
+
+        // ---- Toast ----
+        let toastTimeout;
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toastMsg');
+            const icoEl = document.getElementById('toastIco');
+
+            msgEl.textContent = message;
+            toast.className = 'toast-msg' + (isError ? ' is-error' : '');
+            icoEl.innerHTML = isError
+                ? '<i class="bi bi-exclamation-circle-fill"></i>'
+                : '<i class="bi bi-check-circle-fill"></i>';
+
+            toast.style.display = 'flex';
+            toast.style.animation = 'toastIn 0.35s ease-out forwards';
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.style.animation = 'toastOut 0.35s ease-in forwards';
+                setTimeout(() => { toast.style.display = 'none'; }, 350);
+            }, 4000);
+        }
+
+        // ---- Guard: redirect if not instructor ----
+        if (sessionStorage.getItem('userRole') !== 'Instructor') {
+            window.location.href = 'login.html';
+        }
+    </script>
+
+    <!-- Bootstrap spinner CSS only (for the button spinner) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+        onload="this.media='all'" media="print">
+</body>
+
+</html>
