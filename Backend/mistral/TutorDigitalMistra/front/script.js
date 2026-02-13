@@ -59,9 +59,9 @@ let isProcessing = false;
 let currentAudio = null;       // HTMLAudioElement activo
 let currentAudioUrl = null;    // URL.createObjectURL activo (para liberar memoria)
 let ttsEnabled = true;         // Toggle global de TTS
-let ttsSpeed = 1.35;            // Velocidad de TTS (0.25 - 3.0, edge-tts)
+let ttsSpeed = 1;            // Velocidad de TTS (0.25 - 3.0, edge-tts)
 
-// --- NUEVO: TTS Chunked Pipeline ---
+// --- TTS Chunked Pipeline v2 ---
 let ttsChunkQueue = [];         // Cola de chunks: { text, audioPromise, audioBlob, subtitleWords }
 let ttsIsPlaying = false;       // ¿Hay un chunk reproduciéndose?
 let ttsSentenceBuffer = "";     // Buffer para construir oraciones desde el streaming
@@ -564,8 +564,10 @@ function autoResizeInput() { userInput.style.height = 'auto'; userInput.style.he
 
 
 // ===========================================================================
-// TTS CHUNKED PIPELINE — Audio casi instantáneo con subtítulos sincronizados
+// TTS CHUNKED PIPELINE v2 — Audio ultra-rápido con pre-fetching paralelo
 // ===========================================================================
+// Mientras reproduce un chunk, ya está generando los siguientes en paralelo.
+// Primer chunk se envía con solo 1 oración completa para mínima latencia.
 
 /**
  * Limpia el texto para TTS: elimina etiquetas [Emotion], markdown, etc.
@@ -593,10 +595,8 @@ function extractEmotionSchedule(rawText) {
 
     for (const part of parts) {
         if (/^\[.*\]$/.test(part)) {
-            // Es una etiqueta de emoción → guardar con la posición actual
             schedule.push({ tag: part, wordIndex: wordCount });
         } else {
-            // Es texto → contar sus palabras (misma limpieza que cleanTextForTTS)
             const cleaned = part
                 .replace(/[#*_~`>]/g, '')
                 .replace(/\n/g, ' ')
@@ -613,11 +613,8 @@ function extractEmotionSchedule(rawText) {
 
 /**
  * Divide texto en oraciones usando delimitadores naturales.
- * Busca: . ! ? ; : y también comas seguidas de espacio si la frase es larga.
  */
 function splitIntoSentences(text) {
-    // Dividir por puntos finales de oración (.!?), punto y coma, dos puntos
-    // Mantenemos el delimitador con la oración
     const raw = text.match(/[^.!?;:]+[.!?;:]*/g) || [text];
 
     const sentences = [];
@@ -626,7 +623,6 @@ function splitIntoSentences(text) {
         if (!s) continue;
 
         const words = s.split(/\s+/);
-        // Si la oración es muy larga (>40 palabras), dividirla por comas
         if (words.length > 40) {
             const subParts = s.match(/[^,]+,?/g) || [s];
             let accumulated = "";
@@ -642,10 +638,8 @@ function splitIntoSentences(text) {
                 sentences.push(accumulated.trim());
             }
         } else if (words.length >= 5) {
-            // Oración con al menos 5 palabras → chunk válido
             sentences.push(s);
         } else {
-            // Muy corta → unir con la anterior si existe
             if (sentences.length > 0) {
                 sentences[sentences.length - 1] += " " + s;
             } else {
@@ -654,13 +648,11 @@ function splitIntoSentences(text) {
         }
     }
 
-    // Post-proceso: combinar oraciones consecutivas cortas para reducir llamadas
     const merged = [];
     for (const s of sentences) {
         if (merged.length > 0) {
             const lastWords = merged[merged.length - 1].split(/\s+/).length;
             const curWords = s.split(/\s+/).length;
-            // Si la anterior Y la actual son cortas, combinarlas
             if (lastWords < 8 && curWords < 8) {
                 merged[merged.length - 1] += " " + s;
                 continue;
@@ -672,17 +664,25 @@ function splitIntoSentences(text) {
     return merged.filter(s => s.trim().length > 0);
 }
 
+
+// ── Configuración del pipeline chunked v2 ──
+const TTS_FIRST_CHUNK_SENTENCES = 1;    // Primer chunk: solo 1 oración (latencia mínima)
+const TTS_NORMAL_CHUNK_SENTENCES = 2;   // Chunks siguientes: 2 oraciones (menos cortes)
+const TTS_FIRST_CHUNK_MIN_WORDS = 4;    // Mínimo de palabras para disparar primer chunk
+const TTS_MAX_PREFETCH = 3;             // Cuántos chunks pre-generar en paralelo
+let ttsAbortController = null;          // Para cancelar fetches en vuelo
+
 /**
  * Alimenta el buffer de texto conforme llega del streaming.
- * Estrategia HÍBRIDA: acumula texto y envía un chunk TTS cuando tiene
- * suficiente material (3+ oraciones completas o 40+ palabras).
- * Esto da baja latencia (primer audio rápido) con pocos chunks (voz consistente).
+ * ESTRATEGIA v2: El primer chunk se envía con solo 1 oración completa
+ * para que el usuario oiga audio lo antes posible. Los chunks siguientes
+ * son más grandes (2 oraciones) para reducir micro-cortes.
  */
 function feedTTSSentenceBuffer(chunk) {
     ttsSentenceBuffer += chunk;
 
-    // Buscar oraciones completas en el buffer (terminan en . ! ? seguido de espacio)
-    const sentenceEnders = /[.!?]\s/g;
+    // Buscar oraciones completas en el buffer (terminan en . ! ? seguido de espacio o fin)
+    const sentenceEnders = /[.!?](?:\s|$)/g;
     let lastSentenceEnd = 0;
     let sentenceCount = 0;
     let match;
@@ -692,29 +692,34 @@ function feedTTSSentenceBuffer(chunk) {
         sentenceCount++;
     }
 
-    // Enviar cuando tenemos 3+ oraciones completas O 40+ palabras en oraciones completas
-    if (lastSentenceEnd > 0) {
+    if (lastSentenceEnd === 0 || sentenceCount === 0) return;
+
+    // Decidir cuántas oraciones necesitamos para disparar un chunk
+    const isFirstChunk = (ttsChunkIndex === 0);
+    const requiredSentences = isFirstChunk ? TTS_FIRST_CHUNK_SENTENCES : TTS_NORMAL_CHUNK_SENTENCES;
+
+    if (sentenceCount >= requiredSentences) {
         const readyPart = ttsSentenceBuffer.substring(0, lastSentenceEnd);
         const wordCount = readyPart.trim().split(/\s+/).length;
 
-        if (sentenceCount >= 3 || wordCount >= 40) {
-            const rawText = readyPart.trim();
-            ttsSentenceBuffer = ttsSentenceBuffer.substring(lastSentenceEnd);
+        // Para el primer chunk, verificar mínimo de palabras
+        if (isFirstChunk && wordCount < TTS_FIRST_CHUNK_MIN_WORDS) return;
 
-            // Extraer emociones y limpiar
-            const emotionTags = extractEmotionSchedule(rawText);
-            const cleaned = cleanTextForTTS(rawText);
-            if (cleaned.length > 2) {
-                console.log(`[TTS] Chunk listo (${sentenceCount} oraciones, ${wordCount} palabras, ${emotionTags.length} emociones)`);
-                enqueueTTSChunk(cleaned, emotionTags);
-            }
+        const rawText = readyPart.trim();
+        ttsSentenceBuffer = ttsSentenceBuffer.substring(lastSentenceEnd);
+
+        // Extraer emociones y limpiar
+        const emotionTags = extractEmotionSchedule(rawText);
+        const cleaned = cleanTextForTTS(rawText);
+        if (cleaned.length > 2) {
+            console.log(`[TTS v2] Chunk ${ttsChunkIndex} listo (${sentenceCount} orac, ${wordCount} pal, 1er=${isFirstChunk})`);
+            enqueueTTSChunk(cleaned, emotionTags);
         }
     }
 }
 
 /**
  * Envía lo que quede en el buffer como último chunk TTS.
- * Se llama al final del streaming para no perder texto pendiente.
  */
 function flushTTSSentenceBuffer() {
     if (ttsSentenceBuffer.trim()) {
@@ -722,7 +727,7 @@ function flushTTSSentenceBuffer() {
         const emotionTags = extractEmotionSchedule(rawText);
         const cleaned = cleanTextForTTS(rawText);
         if (cleaned.length > 2) {
-            console.log(`[TTS] Flush final (${cleaned.length} chars, ${emotionTags.length} emociones)`);
+            console.log(`[TTS v2] Flush final (${cleaned.length} chars)`);
             enqueueTTSChunk(cleaned, emotionTags);
         }
         ttsSentenceBuffer = "";
@@ -731,16 +736,17 @@ function flushTTSSentenceBuffer() {
 
 /**
  * Encola un chunk de texto para TTS.
- * Lanza la petición de generación de audio inmediatamente (en paralelo).
- * El audio se reproducirá en orden cuando le toque.
+ * Lanza la petición de generación de audio INMEDIATAMENTE (en paralelo).
+ * Pre-fetching: hasta TTS_MAX_PREFETCH requests en vuelo simultáneamente.
  */
 function enqueueTTSChunk(text, emotionTags = []) {
     if (ttsAborted) return;
 
     const chunkId = ttsChunkIndex++;
+    const startTime = performance.now();
     console.log(`[TTS Chunk ${chunkId}] Encolando: "${text.substring(0, 60)}..."`);
 
-    // Lanzar la petición TTS inmediatamente (en paralelo)
+    // Lanzar la petición TTS inmediatamente (en paralelo con la reproducción actual)
     const audioPromise = fetchTTSAudio(text);
 
     // Crear las palabras para subtítulos
@@ -751,25 +757,27 @@ function enqueueTTSChunk(text, emotionTags = []) {
         text: text,
         audioPromise: audioPromise,
         subtitleWords: subtitleWords,
-        emotionTags: emotionTags,  // Etiquetas de emoción con posiciones
+        emotionTags: emotionTags,
         resolved: false,
         audioBlob: null,
+        fetchStartTime: startTime,
     };
 
     // Resolver la promesa y guardarlo
     audioPromise.then(blob => {
         chunk.audioBlob = blob;
         chunk.resolved = true;
-        console.log(`[TTS Chunk ${chunkId}] Audio listo (${blob ? blob.size : 0} bytes)`);
+        const elapsed = (performance.now() - startTime).toFixed(0);
+        console.log(`[TTS Chunk ${chunkId}] Audio listo en ${elapsed}ms (${blob ? blob.size : 0} bytes)`);
     }).catch(err => {
         console.error(`[TTS Chunk ${chunkId}] Error:`, err);
-        chunk.resolved = true; // Marcarlo como resuelto aunque falle
+        chunk.resolved = true;
         chunk.audioBlob = null;
     });
 
     ttsChunkQueue.push(chunk);
 
-    // Si es el primer chunk, arrancar el pipeline de reproducción
+    // Si no hay reproducción activa, arrancar el pipeline
     if (!ttsIsPlaying) {
         playNextTTSChunk();
     }
@@ -778,31 +786,45 @@ function enqueueTTSChunk(text, emotionTags = []) {
 /**
  * Hace la petición HTTP al backend para generar el audio de un texto.
  * Retorna un Blob con el audio MP3.
+ * Usa AbortController para poder cancelar requests en vuelo.
  */
 async function fetchTTSAudio(text) {
+    if (!ttsAbortController) {
+        ttsAbortController = new AbortController();
+    }
+
     const formData = new FormData();
     formData.append('texto', text);
     formData.append('voz', 'alvaro');
     formData.append('speed', ttsSpeed.toString());
-    // No enviamos instrucciones — el backend aplica las suyas fijas para mantener voz consistente
 
-    const response = await fetch(`${API_URL}/tts`, {
-        method: 'POST',
-        body: formData,
-    });
+    try {
+        const response = await fetch(`${API_URL}/tts`, {
+            method: 'POST',
+            body: formData,
+            signal: ttsAbortController.signal,
+        });
 
-    if (!response.ok) {
-        const errText = await response.text();
-        console.error('[TTS fetch error]', response.status, errText);
-        return null;
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error('[TTS fetch error]', response.status, errText);
+            return null;
+        }
+
+        return await response.blob();
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            console.log('[TTS] Fetch abortado');
+            return null;
+        }
+        throw err;
     }
-
-    return await response.blob();
 }
 
 /**
  * Reproduce el siguiente chunk en la cola.
- * Espera a que su audio esté listo, lo reproduce y muestra subtítulos sincronizados.
+ * PIPELINE v2: Mientras reproduce, el audio del siguiente chunk ya se está
+ * generando en paralelo. Usa pre-decode del blob para eliminar el gap.
  */
 async function playNextTTSChunk() {
     if (ttsAborted) {
@@ -827,12 +849,15 @@ async function playNextTTSChunk() {
 
     // Esperar a que el audio esté listo (si aún no lo está)
     if (!chunk.resolved) {
+        const waitStart = performance.now();
         console.log(`[TTS Chunk ${chunk.id}] Esperando audio...`);
         try {
             await chunk.audioPromise;
         } catch (e) {
-            // Error ya manejado en el .then/.catch del enqueueTTSChunk
+            // Error ya manejado
         }
+        const waitTime = (performance.now() - waitStart).toFixed(0);
+        console.log(`[TTS Chunk ${chunk.id}] Esperó ${waitTime}ms por el audio`);
     }
 
     if (ttsAborted) {
@@ -858,13 +883,15 @@ async function playNextTTSChunk() {
     currentAudio = audio;
     currentAudioUrl = audioUrl;
 
-    return new Promise((resolve) => {
-        // Cuando se carguen los metadatos, sabemos la duración
-        audio.addEventListener('loadedmetadata', () => {
-            const duration = audio.duration; // en segundos
-            console.log(`[TTS Chunk ${chunk.id}] Reproduciendo (${duration.toFixed(2)}s): "${chunk.text.substring(0, 40)}..."`);
+    // Pre-cargar el audio para start más rápido
+    audio.preload = 'auto';
 
-            // Mostrar subtítulos y emociones sincronizados con la duración real del audio
+    return new Promise((resolve) => {
+        audio.addEventListener('loadedmetadata', () => {
+            const duration = audio.duration;
+            console.log(`[TTS Chunk ${chunk.id}] ▶ Reproduciendo (${duration.toFixed(2)}s, ${chunk.subtitleWords.length} pal)`);
+
+            // Mostrar subtítulos y emociones sincronizados
             showSyncedSubtitles(chunk.subtitleWords, duration, chunk.emotionTags);
         });
 
@@ -874,7 +901,7 @@ async function playNextTTSChunk() {
             currentAudioUrl = null;
             resolve();
 
-            // Reproducir siguiente chunk
+            // Siguiente chunk — el audio ya debería estar pre-generado
             playNextTTSChunk();
         });
 
@@ -897,8 +924,7 @@ async function playNextTTSChunk() {
 
 /**
  * Muestra subtítulos sincronizados con la duración real del audio.
- * También programa las etiquetas de emoción para que se envíen a Unity
- * en el momento correcto según su posición en el texto.
+ * Programa etiquetas de emoción para Unity en el momento correcto.
  */
 function showSyncedSubtitles(words, audioDurationSec, emotionTags = []) {
     if (!words || words.length === 0) return;
@@ -907,7 +933,7 @@ function showSyncedSubtitles(words, audioDurationSec, emotionTags = []) {
     const totalDurationMs = audioDurationSec * 1000;
     const timePerWord = totalDurationMs / totalWords;
 
-    // --- Programar etiquetas de emoción sincronizadas con el audio ---
+    // --- Programar etiquetas de emoción ---
     if (emotionTags && emotionTags.length > 0) {
         emotionTags.forEach(({ tag, wordIndex }) => {
             const triggerAt = wordIndex * timePerWord;
@@ -920,13 +946,12 @@ function showSyncedSubtitles(words, audioDurationSec, emotionTags = []) {
             }, triggerAt);
         });
 
-        // Activar la primera emoción inmediatamente si está al inicio
         if (emotionTags[0].wordIndex === 0 && window.unityInstance) {
             window.unityInstance.SendMessage('Tutor', 'SetExpression', emotionTags[0].tag);
         }
     }
 
-    // --- Programar subtítulos sincronizados ---
+    // --- Programar subtítulos ---
     const groups = [];
     for (let i = 0; i < totalWords; i += SUBTITLE_MAX_WORDS) {
         groups.push(words.slice(i, i + SUBTITLE_MAX_WORDS).join(" "));
@@ -954,6 +979,7 @@ function showSyncedSubtitles(words, audioDurationSec, emotionTags = []) {
 
 /**
  * Detiene todo el pipeline TTS.
+ * Cancela fetches en vuelo con AbortController.
  */
 function stopTTS() {
     ttsAborted = true;
@@ -962,6 +988,12 @@ function stopTTS() {
     ttsSentenceBuffer = "";
     ttsChunkIndex = 0;
     ttsOnEndCallback = null;
+
+    // Cancelar fetches en vuelo
+    if (ttsAbortController) {
+        ttsAbortController.abort();
+        ttsAbortController = null;
+    }
 
     if (currentAudio) {
         currentAudio.pause();

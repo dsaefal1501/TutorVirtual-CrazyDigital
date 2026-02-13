@@ -184,7 +184,7 @@ def grade_multiple_choice(req: GradeMultipleRequest, db: Session = Depends(get_d
 # ============================================================================
 
 @app.post("/tts")
-def text_to_speech(
+async def text_to_speech(
     texto: str = Form(..., description="Texto a convertir en audio"),
     voz: str = Form("alvaro", description="Voz: alvaro, elvira, jorge, dalia"),
     instrucciones: str = Form(None, description="No usado (compatibilidad)"),
@@ -192,7 +192,7 @@ def text_to_speech(
 ):
     """
     Convierte texto a audio usando edge-tts (Microsoft Neural Voices).
-    Gratis, rápido y con voz consistente.
+    Gratis, rápido y con voz consistente. Endpoint async para máxima velocidad.
     """
     print(f"[TTS] Recibido: texto='{texto[:50]}...', voz={voz}, speed={speed}")
     
@@ -200,7 +200,7 @@ def text_to_speech(
         raise HTTPException(status_code=400, detail="El texto no puede estar vacío")
     
     try:
-        audio_bytes = tts_service.generar_audio_tts(
+        audio_bytes = await tts_service.generar_audio_tts_async(
             texto=texto,
             voz=voz,
             speed=speed,
