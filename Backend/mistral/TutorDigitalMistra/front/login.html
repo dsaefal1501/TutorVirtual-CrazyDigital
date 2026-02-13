@@ -439,12 +439,14 @@
             const originalText = btn.innerText;
             btn.innerText = "Entrando...";
 
-            // Guardar el rol en sessionStorage para que index.html lo detecte
+            // Guardar el rol en sessionStorage
             sessionStorage.setItem('userRole', selectedRole);
 
-            // Simular petición al servidor (1 segundo)
+            // Redirigir según el rol
+            const destination = selectedRole === 'Instructor' ? 'instructor.html' : 'index.html';
+
             setTimeout(() => {
-                window.location.href = "index.html";
+                window.location.href = destination;
             }, 1000);
         }
     </script>
