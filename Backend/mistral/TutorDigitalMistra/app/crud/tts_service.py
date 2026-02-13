@@ -35,6 +35,17 @@ def _speed_to_rate(speed: float) -> str:
     return f"{sign}{percentage}%"
 
 
+def _resolver_voz(voz: str) -> str:
+    """Resuelve el nombre corto de voz a su ID completo de edge-tts."""
+    if voz in VOCES_DISPONIBLES:
+        return VOCES_DISPONIBLES[voz]
+    elif voz.startswith("es-"):
+        return voz
+    else:
+        print(f"[TTS] Voz '{voz}' no reconocida, usando {VOZ_DEFAULT}")
+        return VOZ_DEFAULT
+
+
 async def _generar_audio_async(
     texto: str,
     voz: str = VOZ_DEFAULT,
@@ -60,6 +71,32 @@ async def _generar_audio_async(
     return b"".join(audio_chunks)
 
 
+async def generar_audio_tts_async(
+    texto: str,
+    voz: str = "alvaro",
+    speed: float = 1.0,
+) -> bytes:
+    """
+    Genera audio desde texto usando edge-tts (versión async directa).
+    Ideal para llamar desde endpoints async de FastAPI.
+    
+    Args:
+        texto: El texto a convertir en audio
+        voz: Nombre corto de la voz (alvaro, elvira, jorge, dalia) o nombre completo
+        speed: Velocidad de reproducción (0.25 a 3.0, donde 1.0 es normal)
+    
+    Returns:
+        bytes del audio generado (formato mp3)
+    """
+    if not texto or not texto.strip():
+        raise ValueError("El texto no puede estar vacío")
+    
+    voice_id = _resolver_voz(voz)
+    print(f"[TTS edge-tts async] texto='{texto[:60]}...', voz={voice_id}, speed={speed}")
+    
+    return await _generar_audio_async(texto, voice_id, speed)
+
+
 def generar_audio_tts(
     texto: str,
     voz: str = "alvaro",
@@ -68,6 +105,7 @@ def generar_audio_tts(
 ) -> bytes:
     """
     Genera audio desde texto usando edge-tts (Microsoft Neural Voices).
+    Versión síncrona — wrapper para compatibilidad.
     
     Args:
         texto: El texto a convertir en audio
@@ -85,17 +123,7 @@ def generar_audio_tts(
     if not texto or not texto.strip():
         raise ValueError("El texto no puede estar vacío")
     
-    # Resolver nombre de voz
-    if voz in VOCES_DISPONIBLES:
-        voice_id = VOCES_DISPONIBLES[voz]
-    elif voz.startswith("es-"):
-        # Ya es un nombre completo de voz edge-tts
-        voice_id = voz
-    else:
-        # Fallback: usar voz por defecto
-        voice_id = VOZ_DEFAULT
-        print(f"[TTS] Voz '{voz}' no reconocida, usando {VOZ_DEFAULT}")
-    
+    voice_id = _resolver_voz(voz)
     print(f"[TTS edge-tts] texto='{texto[:60]}...', voz={voice_id}, speed={speed}")
     
     # Ejecutar la coroutine async de forma síncrona
