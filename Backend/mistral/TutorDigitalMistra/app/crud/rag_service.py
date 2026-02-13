@@ -430,16 +430,16 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
         # 1. Búsqueda Híbrida (Vector + Full-Text) usando función SQL
         vector = generar_embedding(db, pregunta.texto)
         
-        # Llamar a la función SQL 'buscar_contenido_hibrido'
-        # Retorna: id, contenido, pagina, temario_id, score
+        # Aumentamos LIMIT a 20 o 30 para tener "todo el contexto relevante posible"
+        # sin exceder la ventana de tokens del LLM (aprox 30 chunks * 500 tokens = 15k tokens).
         docs_raw = db.execute(
             text("SELECT * FROM buscar_contenido_hibrido(:q_text, :q_emb, :thresh, :limit, :libro_id)"),
             {
                 "q_text": pregunta.texto,
-                "q_emb": str(vector),  # pgvector espera string '[0.1, 0.2...]'
-                "thresh": 0.3,
-                "limit": 5,
-                "libro_id": None # Opcional: filtrar por libro si se desea
+                "q_emb": str(vector),
+                "thresh": 0.2, # Bajamos umbral para captar más cosas periféricas
+                "limit": 30,   # AUMENTO SIGNIFICATIVO (Antes 5)
+                "libro_id": None
             }
         ).all()
         
@@ -450,17 +450,27 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
                 id=row.id,
                 contenido=row.contenido,
                 pagina=row.pagina,
-                temario_id=row.temario_id
+                temario_id=row.temario_id,
+                orden_aparicion=row.get("orden_aparicion", 0) # Asegurar que tenemos este campo si la func lo devuelve
             )
-            # Nota: score no está en el modelo ORM, lo asignamos dinámicamente
-            bk.score_similitud = row.score 
-            docs.append(bk)
+            # Nota: la función SQL buscar_contenido_hibrido NO devuelve orden_aparicion explícitamente en el SELECT original.
+            # Debemos asegurarnos de QUE LA FUNCIÓN SQL LO DEVUELVA o cargarlo aquí.
+            # Como la función SQL retorna (id, contenido, pagina, temario_id, score), FALTA orden_aparicion.
+            # FIX RÁPIDO: Cargar el objeto completo ORM para tener todos los campos.
+            bk_orm = db.query(BaseConocimiento).get(row.id)
+            if bk_orm:
+                bk_orm.score_similitud = row.score
+                docs.append(bk_orm)
             
-        # 2. Construir contexto enriquecido con jerarquía
+        # 2. Ordenar por 'orden_aparicion' GLOBAL del libro
+        # Esto permite que si recuperamos chunks 10, 11, 12, 50, 51... se lean en orden.
+        docs.sort(key=lambda x: x.orden_aparicion if x.orden_aparicion else 0)
+        
+        # 3. Construir contexto enriquecido con jerarquía
         contexto_str = _construir_contexto_enriquecido(db, docs)
         fuentes = [f"Pag {d.pagina}" for d in docs]
         
-        # 3. Cargar historial de la sesión
+        # 4. Cargar historial de la sesión
         historial = _cargar_historial(db, sesion.id, limite=10)
         
         # 4. Construir mensajes con el prompt completo de Pablo
