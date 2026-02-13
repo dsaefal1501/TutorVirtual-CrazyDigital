@@ -59,6 +59,7 @@ let isProcessing = false;
 let currentAudio = null;       // HTMLAudioElement activo
 let currentAudioUrl = null;    // URL.createObjectURL activo (para liberar memoria)
 let ttsEnabled = true;         // Toggle global de TTS
+let ttsSpeed = 5.0;            // Velocidad de TTS (0.5 - 5.0)
 
 // --- NUEVO: TTS Chunked Pipeline ---
 let ttsChunkQueue = [];         // Cola de chunks: { text, audioPromise, audioBlob, subtitleWords }
@@ -147,7 +148,19 @@ chatForm.addEventListener('submit', (e) => {
 if (ttsToggle) {
     ttsToggle.addEventListener('change', () => {
         ttsEnabled = ttsToggle.checked;
+        const speedControl = document.getElementById('ttsSpeedControl');
+        if (speedControl) speedControl.style.opacity = ttsEnabled ? '1' : '0.4';
         if (!ttsEnabled) stopTTS();
+    });
+}
+
+// TTS speed slider
+const ttsSpeedSlider = document.getElementById('ttsSpeed');
+const ttsSpeedLabel = document.getElementById('ttsSpeedLabel');
+if (ttsSpeedSlider) {
+    ttsSpeedSlider.addEventListener('input', () => {
+        ttsSpeed = parseFloat(ttsSpeedSlider.value);
+        if (ttsSpeedLabel) ttsSpeedLabel.textContent = ttsSpeed.toFixed(1) + 'x';
     });
 }
 
@@ -568,14 +581,14 @@ function splitIntoSentences(text) {
         if (!s) continue;
 
         const words = s.split(/\s+/);
-        // Si la oración es muy larga (>30 palabras), dividirla por comas
-        if (words.length > 30) {
+        // Si la oración es muy larga (>40 palabras), dividirla por comas
+        if (words.length > 40) {
             const subParts = s.match(/[^,]+,?/g) || [s];
             let accumulated = "";
             for (const sub of subParts) {
                 accumulated += sub;
                 const accWords = accumulated.trim().split(/\s+/);
-                if (accWords.length >= 15) {
+                if (accWords.length >= 20) {
                     sentences.push(accumulated.trim());
                     accumulated = "";
                 }
@@ -583,8 +596,8 @@ function splitIntoSentences(text) {
             if (accumulated.trim()) {
                 sentences.push(accumulated.trim());
             }
-        } else if (words.length >= 3) {
-            // Oración con al menos 3 palabras → chunk válido
+        } else if (words.length >= 5) {
+            // Oración con al menos 5 palabras → chunk válido
             sentences.push(s);
         } else {
             // Muy corta → unir con la anterior si existe
@@ -596,48 +609,43 @@ function splitIntoSentences(text) {
         }
     }
 
-    return sentences.filter(s => s.trim().length > 0);
+    // Post-proceso: combinar oraciones consecutivas cortas para reducir llamadas
+    const merged = [];
+    for (const s of sentences) {
+        if (merged.length > 0) {
+            const lastWords = merged[merged.length - 1].split(/\s+/).length;
+            const curWords = s.split(/\s+/).length;
+            // Si la anterior Y la actual son cortas, combinarlas
+            if (lastWords < 8 && curWords < 8) {
+                merged[merged.length - 1] += " " + s;
+                continue;
+            }
+        }
+        merged.push(s);
+    }
+
+    return merged.filter(s => s.trim().length > 0);
 }
 
 /**
- * Alimenta el buffer de oraciones conforme llega texto del streaming.
- * Cuando detecta un final de oración, lanza la petición TTS en paralelo.
+ * Alimenta el buffer de texto conforme llega del streaming.
+ * YA NO envía chunks parciales — solo acumula.
+ * Todo se envía como UNA SOLA petición TTS en flushTTSSentenceBuffer().
  */
 function feedTTSSentenceBuffer(chunk) {
     ttsSentenceBuffer += chunk;
-
-    // Buscar oraciones completas en el buffer
-    // Una oración está completa cuando encontramos un delimitador seguido de espacio o fin
-    const sentenceEnders = /([.!?;:])\s/g;
-    let match;
-    let lastCutIndex = 0;
-
-    while ((match = sentenceEnders.exec(ttsSentenceBuffer)) !== null) {
-        const endIndex = match.index + match[1].length; // incluir el delimitador
-        const sentence = ttsSentenceBuffer.substring(lastCutIndex, endIndex).trim();
-        lastCutIndex = match.index + match[0].length; // después del espacio
-
-        if (sentence) {
-            const cleaned = cleanTextForTTS(sentence);
-            if (cleaned.length > 2) { // Evitar chunks triviales
-                enqueueTTSChunk(cleaned);
-            }
-        }
-    }
-
-    // Mantener solo lo que no se ha procesado
-    if (lastCutIndex > 0) {
-        ttsSentenceBuffer = ttsSentenceBuffer.substring(lastCutIndex);
-    }
+    // Solo acumular, no enviar nada todavía
 }
 
 /**
- * Flushea lo que quede en el buffer de oraciones (al final del streaming).
+ * Envía TODO el texto acumulado como UNA SOLA petición TTS.
+ * Esto garantiza voz 100% consistente (una sola generación = una sola voz).
  */
 function flushTTSSentenceBuffer() {
     if (ttsSentenceBuffer.trim()) {
         const cleaned = cleanTextForTTS(ttsSentenceBuffer.trim());
         if (cleaned.length > 2) {
+            console.log(`[TTS] Enviando texto completo (${cleaned.length} chars) como UNA sola petición`);
             enqueueTTSChunk(cleaned);
         }
         ttsSentenceBuffer = "";
@@ -697,6 +705,7 @@ async function fetchTTSAudio(text) {
     const formData = new FormData();
     formData.append('texto', text);
     formData.append('voz', 'onyx');
+    formData.append('speed', ttsSpeed.toString());
     // No enviamos instrucciones — el backend aplica las suyas fijas para mantener voz consistente
 
     const response = await fetch(`${API_URL}/tts`, {
@@ -764,179 +773,112 @@ async function playNextTTSChunk() {
     botIsSpeaking = true;
     if (window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
     updateMicVisuals(false, "Hablando...");
-    try {
-        const formData = new FormData();
-        formData.append('texto', texto);
-        formData.append('voz', 'onyx');
-        formData.append('instrucciones', 'Habla con acento castellano de España, de forma natural, cálida y expresiva, como un profesor cercano. Evita sonar robótico. Usa entonación variada y pausas naturales.');
 
-        return new Promise((resolve) => {
-            // Cuando se carguen los metadatos, sabemos la duración
-            audio.addEventListener('loadedmetadata', () => {
-                const duration = audio.duration; // en segundos
-                console.log(`[TTS Chunk ${chunk.id}] Reproduciendo (${duration.toFixed(2)}s): "${chunk.text.substring(0, 40)}..."`);
+    // Crear y reproducir el audio
+    const audioUrl = URL.createObjectURL(chunk.audioBlob);
+    const audio = new Audio(audioUrl);
+    currentAudio = audio;
+    currentAudioUrl = audioUrl;
 
-                // Mostrar subtítulos sincronizados con la duración real del audio
-                showSyncedSubtitles(chunk.subtitleWords, duration);
-            });
+    return new Promise((resolve) => {
+        // Cuando se carguen los metadatos, sabemos la duración
+        audio.addEventListener('loadedmetadata', () => {
+            const duration = audio.duration; // en segundos
+            console.log(`[TTS Chunk ${chunk.id}] Reproduciendo (${duration.toFixed(2)}s): "${chunk.text.substring(0, 40)}..."`);
 
-            if (!response.ok) {
-                const errText = await response.text();
-                console.error('TTS error:', response.status, errText);
-                finishTTS(onEnd);
-                return;
-            }
-
-            const audioBlob = await response.blob();
-            const audioUrl = URL.createObjectURL(audioBlob);
-
-            // Liberar URL anterior si existe
-            if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
-
-            const audio = new Audio(audioUrl);
-            currentAudio = audio;
-            currentAudioUrl = audioUrl;
-
-            // Esperar a que el audio tenga duración para sincronizar subtítulos
-            audio.addEventListener('loadedmetadata', () => {
-                const duration = audio.duration; // segundos
-                if (duration && duration > 0) {
-                    showSyncedSubtitles(texto, duration);
-                }
-            });
-
-            audio.addEventListener('ended', () => {
-                URL.revokeObjectURL(audioUrl);
-                currentAudio = null;
-                currentAudioUrl = null;
-                resolve();
-
-                // Reproducir siguiente chunk
-                playNextTTSChunk();
-            });
-
-            audio.addEventListener('error', (e) => {
-                console.error(`[TTS Chunk ${chunk.id}] Error reproduciendo:`, e);
-                URL.revokeObjectURL(audioUrl);
-                currentAudio = null;
-                currentAudioUrl = null;
-                resolve();
-                playNextTTSChunk();
-            });
-
-            audio.play().catch(err => {
-                console.error(`[TTS Chunk ${chunk.id}] Error play():`, err);
-                resolve();
-                playNextTTSChunk();
-            });
+            // Mostrar subtítulos sincronizados con la duración real del audio
+            showSyncedSubtitles(chunk.subtitleWords, duration);
         });
-    }
+
+        audio.addEventListener('ended', () => {
+            URL.revokeObjectURL(audioUrl);
+            currentAudio = null;
+            currentAudioUrl = null;
+            resolve();
+
+            // Reproducir siguiente chunk
+            playNextTTSChunk();
+        });
+
+        audio.addEventListener('error', (e) => {
+            console.error(`[TTS Chunk ${chunk.id}] Error reproduciendo:`, e);
+            URL.revokeObjectURL(audioUrl);
+            currentAudio = null;
+            currentAudioUrl = null;
+            resolve();
+            playNextTTSChunk();
+        });
+
+        audio.play().catch(err => {
+            console.error(`[TTS Chunk ${chunk.id}] Error play():`, err);
+            resolve();
+            playNextTTSChunk();
+        });
+    });
+}
 
 /**
  * Muestra subtítulos sincronizados con la duración real del audio.
  * Divide las palabras en grupos legibles y los muestra progresivamente.
  */
 function showSyncedSubtitles(words, audioDurationSec) {
-        if (!words || words.length === 0) return;
+    if (!words || words.length === 0) return;
 
-        const totalWords = words.length;
-        const totalDurationMs = audioDurationSec * 1000;
+    const totalWords = words.length;
+    const totalDurationMs = audioDurationSec * 1000;
 
-        // Calcular cuántas "pantallas" de subtítulos necesitamos
-        // Usamos grupos de hasta SUBTITLE_MAX_WORDS palabras
-        const groups = [];
-        for (let i = 0; i < totalWords; i += SUBTITLE_MAX_WORDS) {
-            groups.push(words.slice(i, i + SUBTITLE_MAX_WORDS).join(" "));
-        }
-
-        // Duración por grupo, proporcional a las palabras que contiene
-        const timePerWord = totalDurationMs / totalWords;
-
-        let elapsed = 0;
-        groups.forEach((groupText, idx) => {
-            const wordsInGroup = groupText.split(/\s+/).length;
-            const groupDuration = wordsInGroup * timePerWord;
-
-            setTimeout(() => {
-                if (ttsAborted) return;
-                subtitleText.className = "subtitle-text subtitle-bot";
-                subtitleText.innerText = groupText;
-            }, elapsed);
-
-            elapsed += groupDuration;
-        });
+    // Calcular cuántas "pantallas" de subtítulos necesitamos
+    // Usamos grupos de hasta SUBTITLE_MAX_WORDS palabras
+    const groups = [];
+    for (let i = 0; i < totalWords; i += SUBTITLE_MAX_WORDS) {
+        groups.push(words.slice(i, i + SUBTITLE_MAX_WORDS).join(" "));
     }
 
+    // Duración por grupo, proporcional a las palabras que contiene
+    const timePerWord = totalDurationMs / totalWords;
 
-    // ===========================================================================
-    // TTS — Control (stop, etc.)
-    // ===========================================================================
+    let elapsed = 0;
+    groups.forEach((groupText, idx) => {
+        const wordsInGroup = groupText.split(/\s+/).length;
+        const groupDuration = wordsInGroup * timePerWord;
 
-    /**
-     * Detiene todo el pipeline TTS.
-     */
-    function stopTTS() {
-        ttsAborted = true;
-        ttsChunkQueue = [];
-        ttsIsPlaying = false;
-        ttsSentenceBuffer = "";
-        ttsChunkIndex = 0;
-        ttsOnEndCallback = null;
+        setTimeout(() => {
+            if (ttsAborted) return;
+            subtitleText.className = "subtitle-text subtitle-bot";
+            subtitleText.innerText = groupText;
+        }, elapsed);
 
-        if (currentAudio) {
-            currentAudio.pause();
-            currentAudio.currentTime = 0;
-            currentAudio = null;
-        }
-        if (currentAudioUrl) {
-            URL.revokeObjectURL(currentAudioUrl);
-            currentAudioUrl = null;
-        }
-        botIsSpeaking = false;
-        // Limpiar subtítulos sincronizados
-        if (window._subtitleTimer) {
-            clearInterval(window._subtitleTimer);
-            window._subtitleTimer = null;
-        }
-        subtitleText.innerText = "";
+        elapsed += groupDuration;
+    });
+}
+
+
+// ===========================================================================
+// TTS — Control (stop, etc.)
+// ===========================================================================
+
+/**
+ * Detiene todo el pipeline TTS.
+ */
+function stopTTS() {
+    ttsAborted = true;
+    ttsChunkQueue = [];
+    ttsIsPlaying = false;
+    ttsSentenceBuffer = "";
+    ttsChunkIndex = 0;
+    ttsOnEndCallback = null;
+
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        currentAudio = null;
     }
-
-    /**
-     * Muestra subtítulos sincronizados con la duración real del audio TTS.
-     * Divide el texto en lotes y los muestra proporcionalmente a la duración.
-     */
-    function showSyncedSubtitles(texto, audioDurationSec) {
-        // Limpiar timer anterior
-        if (window._subtitleTimer) clearInterval(window._subtitleTimer);
-
-        const words = texto.split(/\s+/).filter(w => w.length > 0);
-        if (words.length === 0) return;
-
-        const batchSize = SUBTITLE_BATCH_SIZE; // 7 palabras
-        const batches = [];
-        for (let i = 0; i < words.length; i += batchSize) {
-            batches.push(words.slice(i, i + batchSize).join(' '));
-        }
-
-        const intervalMs = (audioDurationSec * 1000) / batches.length;
-        let batchIndex = 0;
-
-        // Activar animación de habla
-        if (window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
-        subtitleText.className = "subtitle-text subtitle-bot";
-
-        // Mostrar primer lote inmediatamente
-        subtitleText.innerText = batches[0];
-        batchIndex = 1;
-
-        window._subtitleTimer = setInterval(() => {
-            if (batchIndex >= batches.length) {
-                clearInterval(window._subtitleTimer);
-                window._subtitleTimer = null;
-                return;
-            }
-            subtitleText.innerText = batches[batchIndex];
-            batchIndex++;
-        }, intervalMs);
+    if (currentAudioUrl) {
+        URL.revokeObjectURL(currentAudioUrl);
+        currentAudioUrl = null;
     }
+    botIsSpeaking = false;
+
+    // Resetear el flag de abort para la próxima vez
+    setTimeout(() => { ttsAborted = false; }, 50);
 }

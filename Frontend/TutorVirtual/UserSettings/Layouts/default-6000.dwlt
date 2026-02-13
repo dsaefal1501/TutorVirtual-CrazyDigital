@@ -19,7 +19,7 @@ MonoBehaviour:
     width: 1920
     height: 1109
   m_ShowMode: 4
-  m_Title: Inspector
+  m_Title: Hierarchy
   m_RootView: {fileID: 2}
   m_MinSize: {x: 875, y: 300}
   m_MaxSize: {x: 10000, y: 10000}
@@ -218,8 +218,8 @@ MonoBehaviour:
     y: 0
     width: 835
     height: 810
-  m_MinSize: {x: 202, y: 226}
-  m_MaxSize: {x: 4002, y: 4026}
+  m_MinSize: {x: 200, y: 200}
+  m_MaxSize: {x: 4000, y: 4000}
   m_ActualView: {fileID: 17}
   m_Panes:
   - {fileID: 17}
@@ -763,12 +763,10 @@ MonoBehaviour:
       m_LastClickedID:
         m_Data: 0
       m_ExpandedIDs:
-      - m_Data: -5572
-      - m_Data: -5454
-      - m_Data: -4884
+      - m_Data: -4084
+      - m_Data: -3964
+      - m_Data: -3386
       - m_Data: -1370
-      - m_Data: 44130
-      - m_Data: 44154
       m_RenameOverlay:
         m_UserAcceptedRename: 0
         m_Name: 
@@ -1321,7 +1319,7 @@ MonoBehaviour:
   m_Position:
     m_Target: {x: 0.12968029, y: 1.6762893, z: 0.31190607}
     speed: 2
-    m_Value: {x: 0.12791657, y: 1.6816701, z: 0.31213266}
+    m_Value: {x: 0.12968029, y: 1.6762893, z: 0.31190607}
   m_RenderMode: 0
   m_CameraMode:
     drawMode: 0
@@ -1373,7 +1371,7 @@ MonoBehaviour:
   m_Size:
     m_Target: 0.52619636
     speed: 2
-    m_Value: 0.5035372
+    m_Value: 0.52619636
   m_Ortho:
     m_Target: 1
     speed: 2
@@ -1518,7 +1516,7 @@ MonoBehaviour:
       m_Data: 48522
     m_ExpandedIDs:
     - m_Data: 0
-    - m_Data: 44870
+    - m_Data: 44712
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name: 
@@ -1551,7 +1549,7 @@ MonoBehaviour:
       m_Data: 0
     m_ExpandedIDs:
     - m_Data: 0
-    - m_Data: 44870
+    - m_Data: 44712
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name: 
@@ -1711,7 +1709,7 @@ MonoBehaviour:
     serializedVersion: 2
     x: 0
     y: 889
-    width: 1551
+    width: 1071
     height: 217
   m_SerializedDataModeController:
     m_DataMode: 0
@@ -1815,9 +1813,9 @@ MonoBehaviour:
       e32: 0
       e33: 1
   m_PreviewAnimator: {fileID: 0}
-  m_AnimatorController: {fileID: 9100000, guid: c76f9621208556748becb6ce5f6ce255, type: 2}
+  m_AnimatorController: {fileID: 9100000, guid: 4643b212eff122345bf429f406a41d64, type: 2}
   m_BreadCrumbs:
-  - m_Target: {fileID: -5511041129084430613, guid: c76f9621208556748becb6ce5f6ce255, type: 2}
+  - m_Target: {fileID: 8754848465272274596, guid: 4643b212eff122345bf429f406a41d64, type: 2}
     m_ScrollPosition: {x: 0, y: 0}
   stateMachineGraph: {fileID: 0}
   stateMachineGraphGUI: {fileID: 0}
@@ -1829,7 +1827,7 @@ MonoBehaviour:
     m_IsLocked: 0
   m_CurrentEditor: 0
   m_LayerEditor:
-    m_SelectedLayerIndex: 2
+    m_SelectedLayerIndex: 0
 --- !u!114 &23
 MonoBehaviour:
   m_ObjectHideFlags: 52
@@ -1853,7 +1851,7 @@ MonoBehaviour:
     serializedVersion: 2
     x: 0
     y: 889
-    width: 924
+    width: 1071
     height: 217
   m_SerializedDataModeController:
     m_DataMode: 0

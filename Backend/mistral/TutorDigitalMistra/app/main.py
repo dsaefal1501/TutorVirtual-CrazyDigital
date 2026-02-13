@@ -188,12 +188,13 @@ def text_to_speech(
     texto: str = Form(..., description="Texto a convertir en audio"),
     voz: str = Form("onyx", description="Voz: onyx"),
     instrucciones: str = Form(None, description="Instrucciones opcionales de estilo de voz"),
+    speed: float = Form(1.0, description="Velocidad de reproducción (0.25 a 4.0)"),
 ):
     """
     Convierte texto a audio usando Azure gpt-4o-mini-tts.
     Devuelve un archivo de audio MP3.
     """
-    print(f"[TTS] Recibido: texto='{texto[:50]}...', voz={voz}")
+    print(f"[TTS] Recibido: texto='{texto[:50]}...', voz={voz}, speed={speed}")
     
     if not texto or not texto.strip():
         raise HTTPException(status_code=400, detail="El texto no puede estar vacío")
@@ -203,6 +204,7 @@ def text_to_speech(
             texto=texto,
             voz=voz,
             instrucciones=instrucciones,
+            speed=speed,
         )
         return Response(
             content=audio_bytes,
