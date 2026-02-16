@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", loadUnity);
 
 // --- LÓGICA DE LA APLICACIÓN (CHAT & RECONOCIMIENTO) ---
 
-const API_URL = 'http://192.168.18.6:8000'; // Asegúrate de que esta IP sea accesible
+const API_URL = 'http://192.168.18.10:8000'; // Asegúrate de que esta IP sea accesible
 
 // Referencias del DOM
 const chatWidget = document.getElementById('chat-widget');

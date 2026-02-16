@@ -66,11 +66,12 @@
         }
 
         .ambient-shape {
-            position: absolute;
+            position: fixed;
             filter: blur(100px);
-            z-index: 0;
+            z-index: -1;
             opacity: 0.45;
             animation: floatShape 12s infinite ease-in-out;
+            pointer-events: none;
         }
 
         .shape-1 {
@@ -118,12 +119,14 @@
         .dashboard {
             position: relative;
             z-index: 10;
-            width: 94%;
-            max-width: 920px;
+            width: 98%;
+            max-width: 1600px;
+            height: 95vh;
             display: flex;
             flex-direction: column;
             gap: 18px;
             animation: pageIn 0.5s ease-out;
+            margin: auto;
         }
 
         @keyframes pageIn {
@@ -384,6 +387,102 @@
             transform: none;
         }
 
+        /* Tree View Styles - V2 (Collapsible) */
+        .syllabus-sidebar {
+            flex: 0 0 320px;
+            background: rgba(255, 255, 255, 0.6);
+            border-right: 1px solid rgba(255, 255, 255, 0.8);
+            padding: 20px 10px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .tree-node-container {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tree-node-row {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #475569;
+            font-size: 0.95rem;
+            font-weight: 500;
+            user-select: none;
+        }
+
+        .tree-node-row:hover {
+            background: rgba(255, 255, 255, 0.8);
+            color: #1e293b;
+        }
+
+        .tree-node-row.active {
+            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+            color: #2563eb;
+            font-weight: 600;
+            box-shadow: 0 2px 5px rgba(37, 99, 235, 0.1);
+        }
+
+        .node-toggle-btn {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 6px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            cursor: pointer;
+            color: #94a3b8;
+        }
+
+        .node-toggle-btn:hover {
+            background: rgba(0, 0, 0, 0.05);
+            color: #64748b;
+        }
+
+        .node-arrow {
+            transition: transform 0.25s ease;
+            font-size: 0.7rem;
+        }
+
+        .node-arrow.expanded {
+            transform: rotate(90deg);
+        }
+
+        .node-arrow.hidden {
+            visibility: hidden;
+        }
+
+        .node-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Contenedor de hijos (indentado) */
+        .node-children {
+            display: none;
+            flex-direction: column;
+            margin-left: 20px;
+            border-left: 1px solid rgba(200, 210, 230, 0.5);
+            padding-left: 4px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .node-children.open {
+            display: flex;
+            opacity: 1;
+        }
+
         .btn-test-tutor {
             width: 100%;
             padding: 14px;
@@ -441,6 +540,155 @@
             50% {
                 opacity: 0.65;
             }
+        }
+
+        /* ---- Processing Status Container ---- */
+        .processing-status-container {
+            display: none;
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px;
+            background: rgba(220, 238, 251, 0.25);
+            border-radius: 16px;
+            border: 1.5px solid rgba(111, 181, 240, 0.25);
+            margin: 16px 0;
+            animation: statusIn 0.3s ease-out;
+        }
+
+        .processing-status-container.active {
+            display: flex;
+        }
+
+        @keyframes statusIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .status-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-title i {
+            font-size: 1.2rem;
+        }
+
+        .status-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .status-step {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.4);
+            font-size: 0.88rem;
+            color: var(--text-main);
+            opacity: 0.5;
+            transition: all 0.3s ease;
+        }
+
+        .status-step.active {
+            background: rgba(255, 255, 255, 0.7);
+            opacity: 1;
+            font-weight: 500;
+        }
+
+        .status-step.completed {
+            opacity: 0.8;
+        }
+
+        .status-step-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 0.85rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .status-step .status-step-icon {
+            background: rgba(200, 220, 240, 0.5);
+            color: var(--sky-600);
+        }
+
+        .status-step.active .status-step-icon {
+            background: linear-gradient(135deg, var(--sky-400), var(--sky-600));
+            color: white;
+            animation: stepPulse 1.2s ease-in-out infinite;
+        }
+
+        .status-step.completed .status-step-icon {
+            background: var(--green-500);
+            color: white;
+        }
+
+        @keyframes stepPulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        .status-step-text {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .status-step-label {
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        .status-step-detail {
+            font-size: 0.78rem;
+            color: var(--text-light);
+        }
+
+        .status-step.completed .status-step-detail {
+            display: none;
+        }
+
+        .overall-progress {
+            width: 100%;
+            height: 8px;
+            background: rgba(200, 220, 240, 0.35);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .overall-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--sky-400), var(--sky-600));
+            border-radius: 10px;
+            width: 0%;
+            transition: width 0.6s ease;
         }
 
         /* ---- Logout ---- */
@@ -643,12 +891,14 @@
         .syllabus-layout {
             display: flex;
             gap: 0;
-            min-height: 420px;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
         }
 
         .syllabus-sidebar {
-            flex: 0 0 38%;
-            max-height: 500px;
+            flex: 0 0 360px;
+            height: 100%;
             overflow-y: auto;
             padding: 16px;
             border-right: 1.5px solid rgba(200, 220, 240, 0.25);
@@ -666,7 +916,7 @@
 
         .syllabus-content {
             flex: 1;
-            max-height: 500px;
+            height: 100%;
             overflow-y: auto;
             padding: 28px;
             background: rgba(255, 255, 255, 0.3);
@@ -950,6 +1200,332 @@
         .user-profile-action i {
             font-size: 1rem;
         }
+
+        /* ---- Delete Confirmation Modal ---- */
+        .delete-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(6px);
+            z-index: 99999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            animation: modalOverlayIn 0.25s ease;
+        }
+
+        .delete-modal-overlay.open {
+            display: flex;
+        }
+
+        @keyframes modalOverlayIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .delete-modal {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(24px);
+            border: 1.5px solid rgba(200, 220, 240, 0.45);
+            border-radius: 22px;
+            padding: 36px 32px 28px;
+            max-width: 420px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(30, 60, 120, 0.22);
+            animation: modalSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            text-align: center;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.96);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .delete-modal-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #fee2e2, #fecaca);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 18px;
+            font-size: 1.6rem;
+            color: #dc2626;
+        }
+
+        .delete-modal h3 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+
+        .delete-modal p {
+            font-size: 0.88rem;
+            color: #64748b;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .delete-modal p strong {
+            color: #dc2626;
+            font-weight: 700;
+        }
+
+        .delete-modal-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid rgba(200, 210, 230, 0.6);
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            text-align: center;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            background: rgba(248, 250, 252, 0.8);
+            color: #1e293b;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+
+        .delete-modal-input:focus {
+            border-color: #dc2626;
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+        }
+
+        .delete-modal-input.valid {
+            border-color: #dc2626;
+            background: rgba(254, 226, 226, 0.3);
+        }
+
+        .delete-modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .delete-modal-actions button {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 12px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-modal-cancel {
+            background: rgba(200, 210, 230, 0.35);
+            color: #475569;
+        }
+
+        .btn-modal-cancel:hover {
+            background: rgba(200, 210, 230, 0.55);
+        }
+
+        .btn-modal-delete {
+            background: #dc2626;
+            color: #fff;
+            opacity: 0.4;
+            pointer-events: none;
+            transition: all 0.25s;
+        }
+
+        .btn-modal-delete.enabled:hover {
+            background: #b91c1c;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+        }
+
+        /* ---- Upload Modal & New UI ---- */
+        .upload-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(8px);
+            z-index: 2000;
+            /* Higher than other stuff */
+            display: none;
+            align-items: center;
+            justify-content: center;
+            animation: fadeInOverlay 0.2s ease-out;
+        }
+
+        .upload-modal-overlay.open {
+            display: flex;
+        }
+
+        @keyframes fadeInOverlay {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .upload-modal-overlay .glass-card {
+            width: 90%;
+            max-width: 550px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.2);
+            animation: scaleInModal 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+        }
+
+        @keyframes scaleInModal {
+            from {
+                transform: scale(0.9);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .btn-header-add {
+            background: var(--sky-500);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 10px rgba(90, 158, 224, 0.3);
+            margin-right: 18px;
+        }
+
+        .btn-header-add:hover {
+            background: var(--sky-600);
+            transform: scale(1.1) rotate(90deg);
+        }
+
+        .empty-state-container {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-light);
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 16px;
+            border: 2px dashed rgba(200, 220, 240, 0.5);
+        }
+
+        .btn-empty-add {
+            margin-top: 20px;
+            padding: 12px 28px;
+            background: white;
+            color: var(--sky-600);
+            border: 2px solid var(--sky-200);
+            border-radius: 50px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-empty-add:hover {
+            border-color: var(--sky-500);
+            color: var(--sky-700);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Force full width for content view area per user request */
+        #contentViewArea {
+            width: 100% !important;
+            max-width: none !important;
+        }
+
+        .content-body-text {
+            width: 100% !important;
+            max-width: none !important;
+        }
+
+        /* Editor Styles */
+        .content-editor {
+            width: 100%;
+            height: 60vh;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            line-height: 1.6;
+            resize: vertical;
+            background: rgba(255, 255, 255, 0.95);
+            margin-top: 10px;
+        }
+
+        .btn-edit-content {
+            background: none;
+            border: none;
+            color: var(--text-light);
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: color 0.2s;
+            padding: 4px;
+        }
+
+        .btn-edit-content:hover {
+            color: var(--sky-600);
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 4px;
+        }
+
+        .btn-save-content {
+            background: var(--sky-500);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            margin-right: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-cancel-edit {
+            background: #e0e0e0;
+            color: #333;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
     </style>
 </head>
 
@@ -989,78 +1565,38 @@
                 </div>
             </div>
 
-            <!-- Upload Card -->
-            <div class="glass-card" id="uploadCard">
-                <div class="card-title">
-                    <i class="bi bi-file-earmark-pdf-fill"></i>
-                    Subir Temario
-                </div>
 
-                <form id="uploadForm" class="card-body-inner">
-                    <!-- Account ID -->
-                    <div>
-                        <label for="accountIdInput" class="field-label">
-                            <i class="bi bi-building me-1"></i> Account ID
-                        </label>
-                        <input type="text" class="field-input" id="accountIdInput" placeholder="UUID de la empresa"
-                            required>
-                    </div>
-
-                    <!-- Dropzone -->
-                    <div class="dropzone" id="dropzone">
-                        <input type="file" id="fileInput" accept=".pdf" required hidden>
-                        <div class="dropzone-empty" id="dzEmpty">
-                            <i class="bi bi-cloud-arrow-up"></i>
-                            <div class="dz-title">Arrastra tu PDF aquí</div>
-                            <div class="dz-sub">o haz clic para seleccionar</div>
-                        </div>
-                        <div class="dropzone-selected" id="dzSelected">
-                            <i class="bi bi-file-earmark-pdf-fill file-icon"></i>
-                            <div style="flex: 1;">
-                                <div class="file-name" id="fileName">archivo.pdf</div>
-                                <div class="file-size" id="fileSize">0 KB</div>
-                            </div>
-                            <button type="button" class="btn-clear-file" id="clearFileBtn" title="Quitar archivo">
-                                <i class="bi bi-x-circle-fill"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Upload Button -->
-                    <button type="submit" class="btn-primary-custom" id="uploadBtn">
-                        <i class="bi bi-cloud-upload"></i> Subir y Procesar
-                    </button>
-
-                    <!-- Progress -->
-                    <div class="progress-bar-container" id="progressContainer">
-                        <div class="progress-bar-fill" id="progressBar"></div>
-                    </div>
-                </form>
-            </div>
-
-            <!-- Syllabus Viewer Card (se muestra si hay temario) -->
-            <div class="glass-card" id="syllabusViewerCard" style="display:none;">
+            <!-- Syllabus Viewer Card (Siempre visible ahora) -->
+            <div class="glass-card" id="syllabusViewerCard"
+                style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
                 <!-- Header con dropdown -->
                 <div class="syllabus-header">
                     <div class="syllabus-header-title">
                         <i class="bi bi-book-fill"></i>
                         Temario
                     </div>
-                    <div class="dropdown-wrapper">
-                        <button class="dropdown-trigger" id="temarioDropdownBtn" onclick="toggleTemarioDropdown()">
-                            <i class="bi bi-gear"></i> Opciones <i class="bi bi-chevron-down"
-                                style="font-size:0.7rem;"></i>
+
+                    <div style="display:flex; align-items:center;">
+                        <!-- Botón Añadir Rápido -->
+                        <button class="btn-header-add" id="btnAddSyllabusHeader" onclick="openUploadModal()"
+                            title="Añadir libro">
+                            <i class="bi bi-plus-lg"></i>
                         </button>
-                        <div class="dropdown-menu-custom" id="temarioDropdown">
-                            <button class="dropdown-item-custom" onclick="handleRefrescar()">
-                                <i class="bi bi-arrow-clockwise"></i> Refrescar
+
+                        <div class="dropdown-wrapper">
+                            <button class="dropdown-trigger" id="temarioDropdownBtn" onclick="toggleTemarioDropdown()">
+                                <i class="bi bi-gear"></i> Opciones <i class="bi bi-chevron-down"
+                                    style="font-size:0.7rem;"></i>
                             </button>
-                            <button class="dropdown-item-custom" onclick="handleAnadir()">
-                                <i class="bi bi-plus-circle"></i> Añadir temario
-                            </button>
-                            <button class="dropdown-item-custom danger" onclick="handleEliminar()">
-                                <i class="bi bi-trash3"></i> Eliminar todo
-                            </button>
+                            <div class="dropdown-menu-custom" id="temarioDropdown">
+                                <button class="dropdown-item-custom" onclick="handleRefrescar()">
+                                    <i class="bi bi-arrow-clockwise"></i> Refrescar
+                                </button>
+                                <!-- Opción Añadir eliminada de aquí -->
+                                <button class="dropdown-item-custom danger" onclick="handleEliminar()">
+                                    <i class="bi bi-trash3"></i> Eliminar todo
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1073,14 +1609,15 @@
                             <i class="bi bi-hand-index-thumb"></i>
                             Selecciona un tema para ver su contenido
                         </div>
-                        <div id="contentViewArea" style="display:none;"></div>
+                        <div id="contentViewArea"
+                            style="display:none; width: 100% !important; max-width: none !important;"></div>
                     </div>
                 </div>
             </div>
 
             <!-- Test Tutor Button -->
             <button class="btn-test-tutor" id="testTutorBtn">
-                <i class="bi bi-play-circle"></i> Testear Tutor Virtual
+                <i class="bi bi-play-circle"></i> Probar Tutor Virtual
             </button>
         </div>
     </div>
@@ -1091,8 +1628,127 @@
         <span id="toastMsg">OK</span>
     </div>
 
+    <!-- Upload Modal (Ahora superpuesto - Movido fuera del dashboard) -->
+    <div class="upload-modal-overlay" id="uploadModalOverlay">
+        <div class="glass-card" id="uploadCard">
+            <div class="card-title" style="justify-content: space-between;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <i class="bi bi-file-earmark-pdf-fill"></i>
+                    Subir Temario
+                </div>
+                <button onclick="closeUploadModal()"
+                    style="background:none;border:none;font-size:1.5rem;color:var(--text-light);cursor:pointer;padding:0;line-height:1;">&times;</button>
+            </div>
+
+            <form id="uploadForm" class="card-body-inner">
+                <!-- Account ID -->
+                <div>
+                    <label for="accountIdInput" class="field-label">
+                        <i class="bi bi-building me-1"></i> Account ID
+                    </label>
+                    <input type="text" class="field-input" id="accountIdInput" placeholder="UUID de la empresa"
+                        required>
+                </div>
+
+                <!-- Dropzone -->
+                <div class="dropzone" id="dropzone">
+                    <input type="file" id="fileInput" accept=".pdf" required hidden>
+                    <div class="dropzone-empty" id="dzEmpty">
+                        <i class="bi bi-cloud-arrow-up"></i>
+                        <div class="dz-title">Arrastra tu PDF aquí</div>
+                        <div class="dz-sub">o haz clic para seleccionar</div>
+                    </div>
+                    <div class="dropzone-selected" id="dzSelected">
+                        <i class="bi bi-file-earmark-pdf-fill file-icon"></i>
+                        <div style="flex: 1;">
+                            <div class="file-name" id="fileName">archivo.pdf</div>
+                            <div class="file-size" id="fileSize">0 KB</div>
+                        </div>
+                        <button type="button" class="btn-clear-file" id="clearFileBtn" title="Quitar archivo">
+                            <i class="bi bi-x-circle-fill"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Upload Button -->
+                <button type="submit" class="btn-primary-custom" id="uploadBtn">
+                    <i class="bi bi-cloud-upload"></i> Subir y Procesar
+                </button>
+
+                <!-- Processing Status Container -->
+                <div class="processing-status-container" id="processingStatusContainer">
+                    <div class="status-title">
+                        <i class="bi bi-gear-fill"></i>
+                        Procesando tu temario...
+                    </div>
+                    <div class="status-steps" id="statusSteps">
+                        <div class="status-step active" data-step="upload">
+                            <div class="status-step-icon">1</div>
+                            <div class="status-step-text">
+                                <div class="status-step-label">Subiendo archivo</div>
+                                <div class="status-step-detail">Preparando documento...</div>
+                            </div>
+                        </div>
+                        <div class="status-step" data-step="extract">
+                            <div class="status-step-icon">2</div>
+                            <div class="status-step-text">
+                                <div class="status-step-label">Extrayendo contenido</div>
+                                <div class="status-step-detail">Analizando estructura...</div>
+                            </div>
+                        </div>
+                        <div class="status-step" data-step="process">
+                            <div class="status-step-icon">3</div>
+                            <div class="status-step-text">
+                                <div class="status-step-label">Procesando con IA</div>
+                                <div class="status-step-detail">Generando embeddings...</div>
+                            </div>
+                        </div>
+                        <div class="status-step" data-step="store">
+                            <div class="status-step-icon">4</div>
+                            <div class="status-step-text">
+                                <div class="status-step-label">Almacenando temario</div>
+                                <div class="status-step-detail">Finalizando...</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="overall-progress">
+                        <div class="overall-progress-fill" id="overallProgressFill"></div>
+                    </div>
+                </div>
+
+                <!-- Progress -->
+                <div class="progress-bar-container" id="progressContainer">
+                    <div class="progress-bar-fill" id="progressBar"></div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="delete-modal-overlay" id="deleteModalOverlay">
+        <div class="delete-modal">
+            <div class="delete-modal-icon">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+            </div>
+            <h3>Eliminar temario</h3>
+            <p>
+                Esta acción eliminará <strong>permanentemente</strong> el libro y todo su temario,
+                incluyendo contenido, tests y sesiones asociadas.<br><br>
+                Escribe <strong>CONFIRMAR</strong> para proceder:
+            </p>
+            <input type="text" class="delete-modal-input" id="deleteConfirmInput" placeholder="Escribe CONFIRMAR"
+                autocomplete="off" spellcheck="false">
+            <div class="delete-modal-actions">
+                <button class="btn-modal-cancel" onclick="closeDeleteModal()">Cancelar</button>
+                <button class="btn-modal-delete" id="btnConfirmDelete" disabled onclick="executeDelete()">
+                    <i class="bi bi-trash3"></i> Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        const API_URL = 'http://192.168.18.6:8000';
+        const API_URL = 'http://192.168.18.10:8000';
 
         // ---- DOM refs ----
         const uploadForm = document.getElementById('uploadForm');
@@ -1106,6 +1762,8 @@
         const uploadBtn = document.getElementById('uploadBtn');
         const progressContainer = document.getElementById('progressContainer');
         const progressBar = document.getElementById('progressBar');
+        const processingStatusContainer = document.getElementById('processingStatusContainer');
+        const statusSteps = document.getElementById('statusSteps');
 
         // ---- Drag & Drop ----
         dropzone.addEventListener('click', () => fileInput.click());
@@ -1166,19 +1824,43 @@
 
             try {
                 uploadBtn.disabled = true;
-                uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Procesando...';
-                progressContainer.style.display = 'block';
-                progressBar.style.width = '25%';
+                uploadBtn.hidden = true;
+                processingStatusContainer.classList.add('active');
+
+                // Función helper para actualizar pasos
+                const setStepActive = (stepName) => {
+                    // Mark previous steps as completed
+                    const steps = ['upload', 'extract', 'process', 'store'];
+                    const stepIndex = steps.indexOf(stepName);
+
+                    statusSteps.querySelectorAll('.status-step').forEach((el, idx) => {
+                        el.classList.remove('active', 'completed');
+                        if (idx < stepIndex) {
+                            el.classList.add('completed');
+                        } else if (idx === stepIndex) {
+                            el.classList.add('active');
+                        }
+                    });
+
+                    // Update overall progress
+                    const progressPercent = ((stepIndex + 1) / steps.length) * 100;
+                    document.getElementById('overallProgressFill').style.width = progressPercent + '%';
+                };
 
                 const formData = new FormData();
                 formData.append('file', file);
+
+                // Step 1: Upload
+                setStepActive('upload');
+                await new Promise(resolve => setTimeout(resolve, 400));
 
                 const response = await fetch(`${API_URL}/upload/syllabus?account_id=${encodeURIComponent(accountId)}`, {
                     method: 'POST',
                     body: formData
                 });
 
-                progressBar.style.width = '75%';
+                // Step 2: Extract & Process (Backend is working in background)
+                setStepActive('extract');
 
                 const responseText = await response.text();
                 let data;
@@ -1194,20 +1876,77 @@
                     throw new Error(msg);
                 }
 
-                progressBar.style.width = '100%';
+                // La subida ha sido exitosa, el backend procesa en BackgroundTasks.
+                // Ahora debemos esperar a que termine el procesamiento real.
 
+                setStepActive('process');
+
+                // Polling para verificar si el libro ya está listo
+                // Intentaremos verificar si el libro aparece en el syllabus
+                // (O idealmente un endpoint de status, pero usaremos checkSyllabus para detectar cambios)
+
+                let processed = false;
+                let attempts = 0;
+                const maxAttempts = 60; // 2 minutos aprox (cada 2s)
+
+                while (!processed && attempts < maxAttempts) {
+                    await new Promise(r => setTimeout(r, 2000)); // Esperar 2s
+                    attempts++;
+
+                    try {
+                        const checkResp = await fetch(`${API_URL}/syllabus`);
+                        if (checkResp.ok) {
+                            const currentSyllabus = await checkResp.json();
+                            // Verificar si hay algún libro nuevo o si el total de items aumentó significativamente
+                            // O simplemente si hay items asociados a un nuevo libro_id
+
+                            // Estrategia simple: Si antes había N libros, ahora debería haber N+1
+                            // O si la lista no estaba vacía y ahora tiene más cosas.
+
+                            // Mejor: Consultamos el endpoint y si devuelve datos válidos, asumimos que avanzó.
+                            // Para ser más precisos, deberíamos saber el ID del libro, pero el endpoint de upload
+                            // devuelve status 'processing'.
+
+                            // Si checkSyllabus devuelve datos, asumimos que al menos una parte se procesó.
+                            if (currentSyllabus && currentSyllabus.length > (syllabusData ? syllabusData.length : 0)) {
+                                processed = true;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn("Polling error", e);
+                    }
+                }
+
+                if (!processed) {
+                    console.warn("Timeout esperando procesamiento o no se detectaron cambios.");
+                    // No lanzamos error para no bloquear, pero avisamos.
+                }
+
+                // Step 4: Store / Finalize
+                setStepActive('store');
+                await new Promise(resolve => setTimeout(resolve, 800));
+
+                // Completion animation
                 setTimeout(() => {
+                    processingStatusContainer.classList.remove('active');
                     uploadForm.reset();
                     clearFile();
                     progressContainer.style.display = 'none';
-                    progressBar.style.width = '0%';
-                }, 800);
+                    uploadBtn.hidden = false;
+
+                    // Recargar vista final
+                    closeUploadModal();
+                    checkSyllabus();
+
+                }, 1000);
 
                 showToast(data.message || '✅ Archivo procesado exitosamente');
 
             } catch (error) {
                 showToast(`Error: ${error.message}`, true);
                 console.error('Upload error:', error);
+                processingStatusContainer.classList.remove('active');
+                uploadBtn.hidden = false;
             } finally {
                 uploadBtn.disabled = false;
                 uploadBtn.innerHTML = originalHTML;
@@ -1277,6 +2016,7 @@
         });
 
         // Comprobar si hay temario y mostrar la vista correcta
+        // Comprobar si hay temario y mostrar la vista correcta
         async function checkSyllabus() {
             try {
                 const response = await fetch(`${API_URL}/syllabus`);
@@ -1284,27 +2024,34 @@
                 const data = await response.json();
                 syllabusData = data;
 
-                if (data && data.length > 0) {
-                    showSyllabusViewer(data);
-                } else {
-                    showUploadForm();
-                }
+                // Siempre renderizamos el árbol, esté vacío o no
+                renderSyllabusTree(data);
+
+                // Asegurar que el viewer es visible
+                document.getElementById('syllabusViewerCard').style.display = 'flex';
+
             } catch (error) {
                 console.error('Error checking syllabus:', error);
-                showUploadForm();
+                // Si error, mostramos estado vacío en el árbol
+                renderSyllabusTree([]);
             }
         }
 
-        function showUploadForm() {
-            document.getElementById('uploadCard').style.display = 'block';
-            document.getElementById('syllabusViewerCard').style.display = 'none';
+        // ---- Modal Logic ----
+        function openUploadModal() {
+            document.getElementById('uploadModalOverlay').classList.add('open');
         }
 
-        function showSyllabusViewer(data) {
-            document.getElementById('uploadCard').style.display = 'none';
-            document.getElementById('syllabusViewerCard').style.display = 'block';
-            renderSyllabusTree(data);
+        function closeUploadModal() {
+            document.getElementById('uploadModalOverlay').classList.remove('open');
+            // Opcional: limpiar formulario si se cancela?
+            // clearFile();
         }
+
+        // Cerrar modal al hacer clic fuera del card
+        document.getElementById('uploadModalOverlay').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeUploadModal();
+        });
 
         // ---- Dropdown ----
         function toggleTemarioDropdown() {
@@ -1328,16 +2075,15 @@
 
         function handleAnadir() {
             document.getElementById('temarioDropdown').classList.remove('open');
-            // Mostrar el formulario de subida
-            document.getElementById('uploadCard').style.display = 'block';
-            // Scroll hasta el formulario
-            document.getElementById('uploadCard').scrollIntoView({ behavior: 'smooth' });
+            openUploadModal();
         }
 
-        async function handleEliminar() {
+        // ---- Delete Modal (Doble Confirmación) ----
+
+        function handleEliminar(libroId = null) {
             document.getElementById('temarioDropdown').classList.remove('open');
 
-            // Obtener libro_ids únicos del temario cargado
+            // Verificar que hay libros para eliminar
             const libroIds = [...new Set(syllabusData.map(t => t.libro_id).filter(id => id != null))];
 
             if (libroIds.length === 0) {
@@ -1345,19 +2091,102 @@
                 return;
             }
 
-            if (!confirm('¿Estás seguro de que quieres eliminar TODO el temario y su libro? Esta acción no se puede deshacer.')) {
-                return;
+            // Si no se pasa ID, y hay solo uno, asumir ese. Si hay varios, error (o UI diferente)
+            // Pero nuestra UI siempre llamará con ID específico desde el árbol, o general para "Borrar Todo"
+
+            let targetId = libroId;
+            if (!targetId && libroIds.length === 1) targetId = libroIds[0];
+
+            if (!targetId && libroIds.length > 1) {
+                // Caso borde: botón general borrar todo? Por ahora asumimos borrar todo si se llama sin ID
+                // O mostrar toast "Selecciona un libro para eliminar"
+                openDeleteModal(null); // Null significa TODOS
+            } else {
+                openDeleteModal(targetId);
+            }
+        }
+
+        let bookToDeleteId = null;
+
+        function openDeleteModal(libroId) {
+            bookToDeleteId = libroId;
+
+            const overlay = document.getElementById('deleteModalOverlay');
+            const input = document.getElementById('deleteConfirmInput');
+            const btn = document.getElementById('btnConfirmDelete');
+            const title = overlay.querySelector('h3');
+
+            if (libroId) {
+                title.innerText = `¿Eliminar Libro ID ${libroId}?`;
+            } else {
+                title.innerText = '¿Eliminar TODOS los Libros?';
             }
 
-            // Feedback visual
-            const dropdownBtn = document.getElementById('temarioDropdownBtn');
-            const originalBtnHTML = dropdownBtn.innerHTML;
-            dropdownBtn.disabled = true;
-            dropdownBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Eliminando...';
+            // Reset estado
+            input.value = '';
+            input.classList.remove('valid');
+            btn.classList.remove('enabled');
+            btn.disabled = true;
+
+            overlay.classList.add('open');
+
+            // Focus en el input después de la animación
+            setTimeout(() => input.focus(), 300);
+        }
+
+        function closeDeleteModal() {
+            const overlay = document.getElementById('deleteModalOverlay');
+            overlay.classList.remove('open');
+        }
+
+        // Validar input en tiempo real
+        document.addEventListener('DOMContentLoaded', () => {
+            const input = document.getElementById('deleteConfirmInput');
+            const btn = document.getElementById('btnConfirmDelete');
+
+            input.addEventListener('input', () => {
+                const isValid = input.value.trim().toUpperCase() === 'CONFIRMAR';
+                btn.disabled = !isValid;
+                btn.classList.toggle('enabled', isValid);
+                input.classList.toggle('valid', isValid);
+            });
+
+            // Permitir Enter para confirmar si es válido
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !btn.disabled) {
+                    executeDelete();
+                }
+            });
+        });
+
+        // Cerrar modal al hacer clic fuera
+        document.getElementById('deleteModalOverlay').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeDeleteModal();
+        });
+
+        // Cerrar modal con Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeDeleteModal();
+        });
+
+        async function executeDelete() {
+            const btn = document.getElementById('btnConfirmDelete');
+            const originalBtnHTML = btn.innerHTML;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Eliminando...';
 
             try {
-                for (const libroId of libroIds) {
-                    const response = await fetch(`${API_URL}/syllabus/libro/${libroId}`, {
+                let targets = [];
+                if (bookToDeleteId) {
+                    targets = [bookToDeleteId];
+                } else {
+                    // Borrar todos
+                    targets = [...new Set(syllabusData.map(t => t.libro_id).filter(id => id != null))];
+                }
+
+                for (const lid of targets) {
+                    const response = await fetch(`${API_URL}/syllabus/libro/${lid}`, {
                         method: 'DELETE'
                     });
 
@@ -1367,84 +2196,272 @@
                     }
                 }
 
-                showToast('✅ Libro y temario eliminados correctamente');
-                syllabusData = [];
-                // Volver al formulario de subida
-                showUploadForm();
+                closeDeleteModal();
+                showToast('✅ Eliminado correctamente');
+
+                // Recargar en lugar de limpiar todo, por si quedan otros libros
+                checkSyllabus();
 
             } catch (error) {
+                closeDeleteModal();
                 showToast(`Error al eliminar: ${error.message}`, true);
                 console.error('Delete error:', error);
             } finally {
-                dropdownBtn.disabled = false;
-                dropdownBtn.innerHTML = originalBtnHTML;
+                btn.disabled = false;
+                btn.innerHTML = originalBtnHTML;
+                bookToDeleteId = null;
             }
         }
 
         // ---- Tree Rendering ----
+        // ---- Tree Rendering (Recursive with Collapsible Logic) ----
+
         function renderSyllabusTree(data) {
             const container = document.getElementById('syllabusTree');
+            container.innerHTML = '';
 
             if (!data || data.length === 0) {
-                container.innerHTML = `<div class="empty-syllabus">
-                    <i class="bi bi-inbox"></i>
-                    No se encontraron temas.
+                container.innerHTML = `
+                <div class="empty-state-container">
+                    <div style="font-size: 3.5rem; color: var(--sky-200); margin-bottom: 10px;">
+                        <i class="bi bi-inbox-fill"></i>
+                    </div>
+                    <h3 style="margin:0 0 10px 0; font-weight:700; color:var(--text-main);">No hay contenido aún</h3>
+                    <p style="margin:0;">No se ha cargado ningún libro o temario.</p>
+                    <button class="btn-empty-add" onclick="openUploadModal()">
+                        <i class="bi bi-cloud-plus-fill"></i> Añadir Temario
+                    </button>
                 </div>`;
                 return;
             }
 
-            // Build tree from flat data
-            const nodeMap = {};
-            const roots = [];
-
+            // Agrupar por libro
+            const books = {};
             data.forEach(item => {
-                nodeMap[item.id] = { ...item, children: [] };
+                const bid = item.libro_id || 'unknown';
+                if (!books[bid]) books[bid] = [];
+                books[bid].push(item);
             });
 
-            data.forEach(item => {
-                if (item.parent_id && nodeMap[item.parent_id]) {
-                    nodeMap[item.parent_id].children.push(nodeMap[item.id]);
+            // Renderizar cada libro
+            Object.keys(books).forEach((bid, index) => {
+                const bookItems = books[bid];
+
+                // Contenedor del libro
+                const bookContainer = document.createElement('div');
+                bookContainer.className = 'book-section';
+                bookContainer.style.marginBottom = '20px';
+
+                // Título del libro (usamos el nombre del primer nodo raíz o "Libro X")
+                const rootNode = bookItems.find(i => !i.parent_id) || bookItems[0];
+                const bookName = rootNode ? rootNode.nombre : `Libro ${bid}`;
+
+                // --- HEADER DEL LIBRO ---
+                const header = document.createElement('div');
+                header.className = 'book-header';
+                header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.6);border-radius:8px;margin-bottom:5px;font-weight:700;font-size:0.9rem;color:var(--sky-800);cursor:pointer;user-select:none;transition:background 0.2s;';
+
+                // Parte Izquierda: Flecha + Icono + Nombre
+                const leftPart = document.createElement('div');
+                leftPart.style.display = 'flex';
+                leftPart.style.alignItems = 'center';
+                leftPart.style.gap = '8px';
+
+                leftPart.innerHTML = `
+                    <i class="bi bi-chevron-right book-arrow" style="font-size:0.8rem;transition:transform 0.2s;"></i>
+                    <i class="bi bi-book" style="color:var(--sky-600);"></i>
+                    <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;" title="${bookName}">Libro: ${bookName}</span>
+                `;
+
+                header.appendChild(leftPart);
+
+                // Parte Derecha: Botón Configuración (Engranaje)
+                const rightPart = document.createElement('div');
+                rightPart.style.position = 'relative'; // Para posicionar el dropdown
+
+                const configBtn = document.createElement('button');
+                configBtn.className = 'btn-mini-config';
+                configBtn.innerHTML = '<i class="bi bi-gear"></i>';
+                configBtn.title = 'Configuración del libro';
+                configBtn.style.cssText = 'background:none;border:none;color:var(--text-light);cursor:pointer;padding:4px;border-radius:4px;transition:all 0.2s;';
+
+                configBtn.onmouseover = () => configBtn.style.color = 'var(--sky-600)';
+                configBtn.onmouseout = () => configBtn.style.color = 'var(--text-light)';
+
+                // Menú dropdown individual para este libro
+                const bookMenu = document.createElement('div');
+                bookMenu.className = 'book-config-menu';
+                bookMenu.style.cssText = 'display:none;position:absolute;right:0;top:100%;background:white;border:1px solid #eee;box-shadow:0 4px 12px rgba(0,0,0,0.1);border-radius:6px;z-index:100;min-width:120px;overflow:hidden;';
+
+                bookMenu.innerHTML = `
+                    <div class="book-menu-item" onclick="event.stopPropagation(); handleEliminar(${bid})" style="padding:8px 12px;cursor:pointer;font-size:0.85rem;color:#e74c3c;display:flex;align-items:center;gap:6px;">
+                        <i class="bi bi-trash"></i> Eliminar
+                    </div>
+                `;
+
+                // Toggle del menú
+                configBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    // Cerrar otros menús abiertos
+                    document.querySelectorAll('.book-config-menu').forEach(m => {
+                        if (m !== bookMenu) m.style.display = 'none';
+                    });
+
+                    bookMenu.style.display = bookMenu.style.display === 'block' ? 'none' : 'block';
+                };
+
+                rightPart.appendChild(configBtn);
+                rightPart.appendChild(bookMenu);
+                header.appendChild(rightPart);
+
+                bookContainer.appendChild(header);
+
+                // --- CONTENEDOR DE HIJOS (Book Body) ---
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = 'book-children';
+                childrenContainer.style.display = 'none'; // Colapsado por defecto (o block si queremos expandido)
+                childrenContainer.style.paddingLeft = '10px';
+
+                // Lógica de Toggle del Libro
+                const toggleBook = () => {
+                    const arrow = header.querySelector('.book-arrow');
+                    if (childrenContainer.style.display === 'none') {
+                        childrenContainer.style.display = 'block';
+                        arrow.style.transform = 'rotate(90deg)';
+                    } else {
+                        childrenContainer.style.display = 'none';
+                        arrow.style.transform = 'rotate(0deg)';
+                    }
+                };
+
+                // Click en header expande/colapsa
+                header.onclick = (e) => {
+                    // Si clic en botón config, no hace toggle (ya manejado con stopPropagation, pero por seguridad)
+                    if (e.target.closest('.btn-mini-config') || e.target.closest('.book-config-menu')) return;
+                    toggleBook();
+                };
+
+                // Expandir por defecto el primer libro
+                if (index === 0) toggleBook();
+
+                // Construir árbol para este libro
+                const nodeMap = {};
+                const roots = [];
+
+                bookItems.forEach(item => {
+                    nodeMap[item.id] = { ...item, children: [] };
+                });
+
+                bookItems.forEach(item => {
+                    if (item.parent_id && nodeMap[item.parent_id]) {
+                        nodeMap[item.parent_id].children.push(nodeMap[item.id]);
+                    } else {
+                        roots.push(nodeMap[item.id]);
+                    }
+                });
+
+                const sortNodes = (nodes) => {
+                    nodes.sort((a, b) => (a.orden || 0) - (b.orden || 0));
+                    nodes.forEach(n => sortNodes(n.children));
+                };
+                sortNodes(roots);
+
+                roots.forEach(root => {
+                    childrenContainer.appendChild(createNodeElement(root));
+                });
+
+                bookContainer.appendChild(childrenContainer);
+                container.appendChild(bookContainer);
+            });
+        }
+
+        // Cerrar menús al hacer click fuera
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.book-header')) {
+                document.querySelectorAll('.book-config-menu').forEach(m => m.style.display = 'none');
+            }
+        });
+
+        function createNodeElement(node) {
+            // Contenedor principal del nodo (fila + hijos)
+            const container = document.createElement('div');
+            container.className = 'tree-node-container';
+
+            // Fila visual (Texto + Flecha)
+            const row = document.createElement('div');
+            row.className = 'tree-node-row';
+            row.dataset.id = node.id;
+
+            // Acción principal al hacer clic en el nombre: Ver contenido
+            row.onclick = (e) => {
+                // Si hizo clic en la flecha, no cargamos contenido, solo toggle
+                if (e.target.closest('.node-toggle-btn')) return;
+
+                selectTopic(node.id, row);
+            };
+
+            // Botón Toggle (Flecha)
+            const hasChildren = node.children && node.children.length > 0;
+
+            const toggleBtn = document.createElement('div');
+            toggleBtn.className = 'node-toggle-btn';
+
+            if (hasChildren) {
+                toggleBtn.innerHTML = '<i class="bi bi-chevron-right node-arrow"></i>';
+                toggleBtn.onclick = (e) => {
+                    e.stopPropagation(); // Evitar seleccionar el tema
+                    toggleNodeChildren(container, toggleBtn);
+                };
+            } else {
+                toggleBtn.classList.add('hidden'); // Ocupa espacio pero invisible
+            }
+
+            // Nombre del Tema
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'node-name';
+            nameSpan.innerText = node.nombre;
+
+            // Ensamblar fila
+            row.appendChild(toggleBtn);
+            row.appendChild(nameSpan);
+            container.appendChild(row);
+
+            // Contenedor de Hijos
+            if (hasChildren) {
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = 'node-children'; // Oculto por defecto
+
+                node.children.forEach(child => {
+                    childrenContainer.appendChild(createNodeElement(child));
+                });
+                container.appendChild(childrenContainer);
+            }
+
+            return container;
+        }
+
+        function toggleNodeChildren(nodeContainer, toggleBtn) {
+            const childrenContainer = nodeContainer.querySelector('.node-children');
+            const arrow = toggleBtn.querySelector('.node-arrow');
+
+            if (childrenContainer) {
+                const isOpen = childrenContainer.classList.contains('open');
+
+                if (isOpen) {
+                    childrenContainer.classList.remove('open');
+                    arrow.classList.remove('expanded');
                 } else {
-                    roots.push(nodeMap[item.id]);
-                }
-            });
-
-            // Flatten tree to ordered list for arrow logic
-            const flatList = [];
-            function flattenNode(node, depth) {
-                flatList.push({ ...node, depth });
-                if (node.children.length > 0) {
-                    node.children.sort((a, b) => a.orden - b.orden);
-                    node.children.forEach(child => flattenNode(child, depth + 1));
+                    childrenContainer.classList.add('open');
+                    arrow.classList.add('expanded');
                 }
             }
-            roots.sort((a, b) => a.orden - b.orden);
-            roots.forEach(root => flattenNode(root, 0));
-
-            // Render
-            let html = '';
-            flatList.forEach((node, idx) => {
-                const indent = node.depth * 24;
-                const isFirst = idx === 0;
-                const isLast = idx === flatList.length - 1;
-                const arrow = isLast ? '↓' : '↑';
-
-                html += `<div class="tree-node" style="margin-left: ${indent}px;"
-                     onclick="selectTopic(${node.id}, this)"
-                     data-id="${node.id}">
-                    <span class="node-name">${node.nombre}</span>
-                    <span class="node-arrow">${arrow}</span>
-                </div>`;
-            });
-
-            container.innerHTML = html;
         }
 
         // ---- Topic Content ----
-        async function selectTopic(topicId, element) {
+        async function selectTopic(topicId, rowElement) {
             // Visual: marcar activo
-            document.querySelectorAll('.tree-node').forEach(n => n.classList.remove('active'));
-            element.classList.add('active');
+            document.querySelectorAll('.tree-node-row').forEach(n => n.classList.remove('active'));
+            if (rowElement) rowElement.classList.add('active');
 
             const placeholder = document.getElementById('contentPlaceholder');
             const viewArea = document.getElementById('contentViewArea');
@@ -1461,7 +2478,14 @@
                 let contentHTML = '';
 
                 // Título grande
-                contentHTML += `<div class="content-title-main fade-in">${data.titulo || 'Sin título'}</div>`;
+                // Título grande con botón de editar
+                contentHTML += `
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <div class="content-title-main fade-in" style="margin-bottom:0;">${data.titulo || 'Sin título'}</div>
+                    <button onclick="enableEditMode(${topicId})" class="btn-edit-content" title="Editar contenido">
+                        <i class="bi bi-pencil-square"></i>
+                    </button>
+                </div>`;
 
                 // Contenido
                 if (data.contenido && data.contenido.trim()) {
@@ -1480,9 +2504,15 @@
                         contentHTML += `<div class="content-subtitle fade-in">${firstSubtitle}</div>`;
                     }
 
-                    contentHTML += `<div class="content-body-text fade-in">${bodyText
-                        .replace(/\n\n/g, '<br><br>')
-                        .replace(/\n/g, '<br>')}</div>`;
+                    // Unwrap hard-wrapped text from PDF extraction so it fills width
+                    const processedText = bodyText
+                        .replace(/\r\n/g, '\n')
+                        .replace(/## (.*?) ##/g, '<h3 style="margin-top:20px;color:var(--sky-600);font-size:1.1rem;">$1</h3>')
+                        .replace(/\n{2,}/g, '__PARAGRAPH__')
+                        .replace(/\n/g, ' ') // Single newline -> space (unwrap)
+                        .replace(/__PARAGRAPH__/g, '<br><br>');
+
+                    contentHTML += `<div class="content-body-text fade-in">${processedText}</div>`;
                 } else {
                     contentHTML += '<div class="content-body-text fade-in" style="color:var(--text-light);font-style:italic;">Este tema no tiene contenido asignado aún.</div>';
                 }
@@ -1501,17 +2531,91 @@
             }
         }
 
-        // Modificar el upload para recargar vista después de subir
-        const origSubmitHandler = uploadForm.onsubmit;
-        uploadForm.addEventListener('submit', function afterUpload() {
-            // Después de que termine la subida, recargar syllabus
-            const origFetch = window.fetch;
-            // Dar 2 segundos para que termine el procesamiento
-            setTimeout(() => checkSyllabus(), 3000);
-        });
+        // (Listener redundante eliminado - ya manejado en uploadForm.onsubmit)
     </script>
 
     <!-- Bootstrap spinner CSS only (for the button spinner) -->
+    <script>
+        async function enableEditMode(topicId) {
+            const viewArea = document.getElementById('contentViewArea');
+            viewArea.innerHTML = '<div style="text-align:center;padding:40px;"><i class="bi bi-hourglass-split"></i> Cargando editor...</div>';
+
+            try {
+                // Fetch NON-recursive content for editing
+                const response = await fetch(`${API_URL}/syllabus/${topicId}/content?recursive=false`);
+                if (!response.ok) throw new Error("Error fetching raw content");
+                const data = await response.json();
+
+                let rawContent = data.contenido || "";
+
+                // Extract content from div wrappers
+                let editableText = "";
+                const regex = /<div id='bloque-.*?'>([\s\S]*?)<\/div>/g;
+                let match;
+                let found = false;
+                while ((match = regex.exec(rawContent)) !== null) {
+                    editableText += match[1] + "\n\n";
+                    found = true;
+                }
+                if (!found && rawContent.trim()) editableText = rawContent;
+
+                // Remove extra newlines at end
+                editableText = editableText.trim();
+
+                viewArea.innerHTML = `
+                    <div class="editor-container fade-in">
+                        <div style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+                            <div style="color:var(--text-main); font-weight:600;">Modo Edición</div>
+                            <div>
+                                <button onclick="saveContent(${topicId})" class="btn-save-content">
+                                    <i class="bi bi-save"></i> Guardar Cambios
+                                </button>
+                                <button onclick="selectTopic(${topicId})" class="btn-cancel-edit">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                        <textarea id="contentEditor" class="content-editor" spellcheck="false">${editableText}</textarea>
+                        <div style="margin-top:5px; font-size:0.8rem; color:var(--text-light);">
+                            <i class="bi bi-info-circle"></i> Puedes usar formato Markdown (## Título ##)
+                        </div>
+                    </div>
+                `;
+            } catch (e) {
+                console.error(e);
+                alert("Error: " + e.message);
+                selectTopic(topicId); // Revert
+            }
+        }
+
+        async function saveContent(topicId) {
+            const content = document.getElementById('contentEditor').value;
+            const btn = document.querySelector('.btn-save-content');
+            const originalText = btn.innerHTML;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...';
+
+            try {
+                const response = await fetch(`${API_URL}/syllabus/${topicId}/content`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contenido: content })
+                });
+
+                if (!response.ok) throw new Error("Error saving");
+
+                // Reload view
+                showToast("Contenido guardado correctamente");
+                selectTopic(topicId);
+
+            } catch (e) {
+                alert("Error al guardar: " + e.message);
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+    </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
         onload="this.media='all'" media="print">
 </body>

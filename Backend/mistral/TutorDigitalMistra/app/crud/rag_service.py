@@ -106,6 +106,15 @@ METODO SOCRATICO: Guía con preguntas, no des la solución final de golpe.
 
 CONEXION: Solo usar conexión con lo anterior si el alumno menciona explícitamente que continúan un tema previo.
 
+CONEXION: Solo usar conexión con lo anterior si el alumno menciona explícitamente que continúan un tema previo.
+
+LIMITACION DE CONOCIMIENTO (MODO RAG):
+Si se te proporciona un CONTEXTO DEL LIBRO, tu conocimiento se limita EXCLUSIVAMENTE a ese texto.
+Si la pregunta del alumno no se puede responder con el contexto proporcionado:
+1. NO inventes respuesta académica.
+2. NO uses tu conocimiento general.
+3. Indica amablemente que esa información no está en el temario actual o que simplemente no hay temario.
+
 PROHIBICIONES
 
 NUNCA escribas texto antes de la primera etiqueta.
@@ -480,11 +489,21 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
         msgs = [{"role": "system", "content": PABLO_SYSTEM_PROMPT}]
         msgs.extend(historial)
         
-        user_msg = (
-            f"CONTEXTO DEL LIBRO (usa este contenido LITERAL para responder):\n"
-            f"{contexto_str}\n\n"
-            f"PREGUNTA DEL ALUMNO: {pregunta.texto}"
-        )
+        user_msg = ""
+        if not docs:
+            # Caso: Base de datos vacía o sin coincidencias -> Evitar alucinación
+            user_msg = (
+                f"SITUACIÓN: No se ha encontrado información en el libro sobre la pregunta del alumno (Base de datos vacía o tema no encontrado).\n"
+                f"PREGUNTA DEL ALUMNO: {pregunta.texto}\n\n"
+                f"INSTRUCCIÓN: Responde al alumno (manteniendo tu personalidad de Pablo) que no tienes información sobre este tema en el temario cargado actualmente. "
+                f"No intentes explicar el concepto con tu conocimiento general."
+            )
+        else:
+            user_msg = (
+                f"CONTEXTO DEL LIBRO (usa este contenido LITERAL para responder):\n"
+                f"{contexto_str}\n\n"
+                f"PREGUNTA DEL ALUMNO: {pregunta.texto}"
+            )
         msgs.append({"role": "user", "content": user_msg})
         
         # 5. Llamada a Mistral
@@ -561,9 +580,19 @@ def preguntar_al_tutor_stream(db: Session, pregunta: PreguntaUsuario):
     # Construir mensajes con Pablo completo
     msgs = [{"role": "system", "content": PABLO_SYSTEM_PROMPT}]
     msgs.extend(historial)
+    
+    if not docs:
+        user_msg_stream = (
+            f"SITUACIÓN: No se ha encontrado información en el libro (Base de datos vacía o tema no encontrado).\n"
+            f"PREGUNTA DEL ALUMNO: {pregunta.texto}\n\n"
+            f"INSTRUCCIÓN: Responde amablemente que no tienes información sobre ese tema en el material actual. NO inventes contenido."
+        )
+    else:
+        user_msg_stream = f"CONTEXTO DEL LIBRO (usa este contenido LITERAL para responder):\n{contexto_str}\n\nPREGUNTA DEL ALUMNO: {pregunta.texto}"
+
     msgs.append({
         "role": "user", 
-        "content": f"CONTEXTO DEL LIBRO (usa este contenido LITERAL para responder):\n{contexto_str}\n\nPREGUNTA DEL ALUMNO: {pregunta.texto}"
+        "content": user_msg_stream
     })
     
     if client:
@@ -650,13 +679,48 @@ def obtener_jerarquia_temario(db: Session) -> List[Dict]:
     return resultado
 
 
-def obtener_contenido_tema(db: Session, temario_id: int) -> Dict:
+def _obtener_ids_recursivos(db: Session, temario_id: int) -> List[int]:
+    """Helper: obtiene ID de tema actual + todos sus descendientes."""
+    ids = [temario_id]
+    hijos = db.query(Temario).filter(Temario.parent_id == temario_id).order_by(Temario.orden).all()
+    for hijo in hijos:
+        ids.extend(_obtener_ids_recursivos(db, hijo.id))
+    return ids
+
+def obtener_contenido_tema(db: Session, temario_id: int, recursivo: bool = True) -> Dict:
     """
     Devuelve el contenido (bloques de texto) de un tema específico.
+    Si recursivo=True, incluye hijos (recursivo).
+    Si recursivo=False, solo el contenido asignado directamente a ese tema.
     """
-    bloques = _obtener_bloques_tema_completo(db, temario_id)
+    # 1. Obtener IDs (rama completa o solo actual)
+    if recursivo:
+        ids_rama = _obtener_ids_recursivos(db, temario_id)
+    else:
+        ids_rama = [temario_id]
     
-    texto_completo = "\n\n".join([b.contenido for b in bloques])
+    # 2. Recuperar todos los bloques de esos temas
+    # Hacemos JOIN con Temario para ordenar por orden del tema y luego por orden del bloque
+    bloques = db.query(BaseConocimiento).join(Temario).filter(
+        BaseConocimiento.temario_id.in_(ids_rama)
+    ).order_by(
+        Temario.orden.asc(),                    # Primero orden del tema (capítulo 1, 2, 3...)
+        BaseConocimiento.orden_aparicion.asc()  # Luego orden dentro del tema
+    ).all()
+    
+    # 3. Construir texto concatenado con separadores visuales
+    texto_completo = ""
+    ultimo_tema_id = None
+    
+    for b in bloques:
+        # Añadir cabecera si cambiamos de tema (subtítulo implícito)
+        # Solo si es recursivo o si hay multiplicidad (aunque recursivo=False solo hay 1 tema)
+        if recursivo and b.temario_id != ultimo_tema_id:
+            tema_nombre = db.query(Temario.nombre).filter(Temario.id == b.temario_id).scalar()
+            texto_completo += f"\n\n## {tema_nombre} ##\n\n"
+            ultimo_tema_id = b.temario_id
+        
+        texto_completo += f"<div id='bloque-{b.temario_id}'>{b.contenido}</div>\n\n"
     
     nombre_tema = db.query(Temario.nombre).filter(Temario.id == temario_id).scalar()
     
@@ -666,6 +730,84 @@ def obtener_contenido_tema(db: Session, temario_id: int) -> Dict:
         "contenido": texto_completo,
         "bloques_count": len(bloques)
     }
+
+
+def actualizar_contenido_tema(db: Session, temario_id: int, nuevo_contenido: str) -> Dict:
+    """
+    Actualiza el contenido de un tema específico.
+    Borra los bloques anteriores y crea uno nuevo con el contenido actualizado.
+    Re-genera los embeddings.
+    """
+    # 0. Obtener IDs de los bloques a eliminar
+    bloques = db.query(BaseConocimiento).filter(
+        BaseConocimiento.temario_id == temario_id
+    ).all()
+    bloques_ids = [b.id for b in bloques]
+    
+    if bloques_ids:
+        # 0a. Borrar Citas de Chat asociadas (CASCADE de FK manual)
+        db.query(ChatCitas).filter(
+            ChatCitas.base_conocimiento_id.in_(bloques_ids)
+        ).delete(synchronize_session=False)
+
+        # 0b. Actualizar ProgresoAlumno (set NULL para no romper FK)
+        db.query(ProgresoAlumno).filter(
+            ProgresoAlumno.ultimo_contenido_visto_id.in_(bloques_ids)
+        ).update({ProgresoAlumno.ultimo_contenido_visto_id: None}, synchronize_session=False)
+        
+        # 0c. Desvincular referencias circulares (propias de la tabla BaseConocimiento - chunk_anterior_id)
+        # Tanto en los bloques que vamos a borrar (para evitar constraint check al borrar)
+        # Como en bloques externos que apunten a estos
+        
+        # Romper referencias internas
+        db.query(BaseConocimiento).filter(
+            BaseConocimiento.id.in_(bloques_ids)
+        ).update({BaseConocimiento.chunk_anterior_id: None}, synchronize_session=False)
+        
+        # Romper referencias externas
+        db.query(BaseConocimiento).filter(
+            BaseConocimiento.chunk_anterior_id.in_(bloques_ids)
+        ).update({BaseConocimiento.chunk_anterior_id: None}, synchronize_session=False)
+
+        db.commit() # IMPORTANTE: Aplicar actualizaciones antes de borrar
+
+        # 1. Borrar bloques
+        db.query(BaseConocimiento).filter(
+            BaseConocimiento.temario_id == temario_id
+        ).delete(synchronize_session=False)
+        db.commit()
+    
+    # 2. Verificar existencia del tema
+    tema = db.query(Temario).get(temario_id)
+    if not tema:
+        return {"error": "Tema no encontrado"}
+
+    # 3. Generar embedding del nuevo contenido
+    # Incluimos título para contexto semántico
+    texto_embedding = f"[{tema.nombre}]: {nuevo_contenido[:8000]}" 
+    vector = generar_embedding(db, texto_embedding)
+    
+    # 4. Crear nuevo bloque único
+    nuevo_bloque = BaseConocimiento(
+        temario_id=temario_id,
+        contenido=nuevo_contenido,
+        tipo_contenido="texto",
+        orden_aparicion=1,
+        pagina=tema.pagina_inicio or 0,
+        ref_fuente=f"Editado manualmente - {tema.nombre}",
+        embedding=vector,
+        metadata_info={
+            "titulo": tema.nombre,
+            "nivel": tema.nivel,
+            "orden": tema.orden,
+            "origen": "manual_update"
+        }
+    )
+    db.add(nuevo_bloque)
+    db.commit()
+    db.refresh(nuevo_bloque)
+    
+    return {"mensaje": "Contenido actualizado correctamente", "id": nuevo_bloque.id}
 
 
 def eliminar_libro_completo(db: Session, libro_id: int) -> Dict:

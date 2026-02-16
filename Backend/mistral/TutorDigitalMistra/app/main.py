@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db, engine, SessionLocal
 from app.models import modelos
 from app.schemas.schemas import (
-    PreguntaUsuario, RespuestaTutor, 
+    PreguntaUsuario, RespuestaTutor, ContenidoUpdate,
     AssessmentGenerate, AssessmentResponse,
     GradeOpenRequest, GradeMultipleRequest, GradeResponse
 )
@@ -252,14 +252,26 @@ def get_syllabus(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/syllabus/{temario_id}/content")
-def get_syllabus_content(temario_id: int, db: Session = Depends(get_db)):
+def get_syllabus_content(temario_id: int, recursive: bool = True, db: Session = Depends(get_db)):
     """
     Devuelve el contenido textual de un tema específico.
     """
     try:
-        return rag_service.obtener_contenido_tema(db, temario_id)
+        return rag_service.obtener_contenido_tema(db, temario_id, recursivo=recursive)
     except Exception as e:
         print(f"Error obteniendo contenido tema {temario_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/syllabus/{temario_id}/content")
+def update_syllabus_content(temario_id: int, req: ContenidoUpdate, db: Session = Depends(get_db)):
+    """
+    Actualiza el contenido de un tema.
+    """
+    try:
+        return rag_service.actualizar_contenido_tema(db, temario_id, req.contenido)
+    except Exception as e:
+        print(f"Error actualizando contenido tema {temario_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

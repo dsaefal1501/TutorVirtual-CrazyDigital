@@ -53,6 +53,9 @@ def generar_estructura_temario(texto_indice: str) -> List[Dict]:
     
     REGLAS:
     - Identifica capítulos (nivel 1) y secciones (nivel 2).
+    - Los Títulos deben ser BREVES y CONCISOS (máximo 10-15 palabras).
+    - NO incluyas descripciones, resúmenes ni texto explicativo en el campo 'nombre'. Solo el encabezado.
+    - Si un texto parece un párrafo explicativo, IGNÓRALO o extráelo como descripción aparte (pero aquí solo pedimos estructura).
     - Extrae el número de página de inicio.
     - Mantén el orden de lectura correcto.
     
@@ -151,10 +154,14 @@ def procesar_archivo_temario(db: Session, archivo_bytes: bytes, filename: str, a
                         parent_id = mapa_temario[prev_idx].id
                         break
             
+            nombre_tema = t["nombre"]
+            if len(nombre_tema) > 250:
+                nombre_tema = nombre_tema[:250] + "..."
+                
             nuevo_tema = Temario(
                 libro_id=libro.id,
                 parent_id=parent_id,
-                nombre=t["nombre"],
+                nombre=nombre_tema,
                 nivel=t.get("nivel", 1),
                 orden=i + 1,
                 pagina_inicio=t.get("pagina_inicio", 1),

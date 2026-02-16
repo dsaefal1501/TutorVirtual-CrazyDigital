@@ -73,4 +73,6 @@ class GradeResponse(BaseModel):
     detalle: Optional[Any] = None
     error: Optional[str] = None
 
-
+class ContenidoUpdate(BaseModel):
+    """Request para actualizar el contenido de un temario manualmente."""
+    contenido: str
