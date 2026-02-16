@@ -100,9 +100,10 @@ BIEN: [Explaining] Dos más dos es igual a cuatro.
 
 REGLAS DE COMUNICACION
 
-BREVEDAD EXTREMA: Máximo 3 frases, pero con varias emociones intercaladas.
+BREVEDAD: Intenta ser conciso (3-4 frases) en diálogos normales.
+EXCEPCIÓN: Si debes explicar un tema complejo, listar el temario o dar código, EXTIÉNDETE lo necesario. Usa listas y pasos claros.
 
-METODO SOCRATICO: Guía con preguntas, no des la solución final de golpe.
+METODO SOCRATICO: Guía con preguntas, no des la solución final de golpe (salvo que sea una explicación teórica pura).
 
 CONEXION: Solo usar conexión con lo anterior si el alumno menciona explícitamente que continúan un tema previo.
 
@@ -437,55 +438,67 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
         else:
             respuesta_texto = "[Happy] ¡Felicidades! Has completado todo el contenido disponible. ¿Quieres repasar algún tema en particular?"
     
-    # --- RAMA C: MODO RAG (Resolver dudas con contenido del libro) ---
+    # --- RAMA C: MODO RAG "MEGA CONTEXTO" (Estructura Global + Tema Actual + Búsqueda) ---
     else:
-        # 1. Búsqueda Híbrida (Vector + Full-Text) usando función SQL
+        # A. OBTENER ESTRUCTURA DEL LIBRO (Global Awareness)
+        # Esto le permite saber "dónde está" en el mapa general
+        temas_global = db.query(Temario).filter(Temario.activo == True).order_by(Temario.orden).all()
+        estructura_txt = "INDICE DEL LIBRO:\n" + "\n".join([f"- {t.nombre}" for t in temas_global])
+        
+        docs_map = {} # Usamos dict para evitar duplicados por ID
+        
+        # B. CARGAR TEMA ACTUAL COMPLETO (Local Depth)
+        # Si la sesión tiene un tema asignado, cargamos TODO su contenido
+        if sesion.temario_id:
+            bloques_tema = db.query(BaseConocimiento).filter(
+                BaseConocimiento.temario_id == sesion.temario_id
+            ).all()
+            for b in bloques_tema:
+                # Asignamos score alto artificialmente porque ES el tema actual
+                b.score_similitud = 1.0 
+                docs_map[b.id] = b
+
+        # C. BÚSQUEDA HÍBRIDA COMPLEMENTARIA (Para dudas que cruzan temas)
         vector = generar_embedding(db, pregunta.texto)
         
-        # Aumentamos LIMIT a 20 o 30 para tener "todo el contexto relevante posible"
-        # sin exceder la ventana de tokens del LLM (aprox 30 chunks * 500 tokens = 15k tokens).
         docs_raw = db.execute(
             text("SELECT * FROM buscar_contenido_hibrido(:q_text, :q_emb, :thresh, :limit, :libro_id)"),
             {
                 "q_text": pregunta.texto,
                 "q_emb": str(vector),
-                "thresh": 0.2, # Bajamos umbral para captar más cosas periféricas
-                "limit": 30,   # AUMENTO SIGNIFICATIVO (Antes 5)
+                "thresh": 0.25, 
+                "limit": 15, # Reducimos un poco el límite vectorial ya que metemos todo el tema actual
                 "libro_id": None
             }
         ).all()
         
-        # Convertir a objetos o diccionarios usables
-        docs = []
         for row in docs_raw:
-            bk = BaseConocimiento(
-                id=row.id,
-                contenido=row.contenido,
-                pagina=row.pagina,
-                temario_id=row.temario_id,
-                orden_aparicion=row.get("orden_aparicion", 0) # Asegurar que tenemos este campo si la func lo devuelve
-            )
-            # Nota: la función SQL buscar_contenido_hibrido NO devuelve orden_aparicion explícitamente en el SELECT original.
-            # Debemos asegurarnos de QUE LA FUNCIÓN SQL LO DEVUELVA o cargarlo aquí.
-            # Como la función SQL retorna (id, contenido, pagina, temario_id, score), FALTA orden_aparicion.
-            # FIX RÁPIDO: Cargar el objeto completo ORM para tener todos los campos.
-            bk_orm = db.query(BaseConocimiento).get(row.id)
-            if bk_orm:
-                bk_orm.score_similitud = row.score
-                docs.append(bk_orm)
-            
-        # 2. Ordenar por 'orden_aparicion' GLOBAL del libro
-        # Esto permite que si recuperamos chunks 10, 11, 12, 50, 51... se lean en orden.
+            if row.id not in docs_map:
+                bk = BaseConocimiento(
+                    id=row.id,
+                    contenido=row.contenido,
+                    pagina=row.pagina,
+                    temario_id=row.temario_id,
+                    orden_aparicion=row.get("orden_aparicion", 0)
+                )
+                # Recargar ORM si falta info
+                bk_orm = db.query(BaseConocimiento).get(row.id)
+                if bk_orm:
+                    bk_orm.score_similitud = row.score
+                    docs_map[row.id] = bk_orm
+        
+        # Convertir a lista y ORDENAR GLOBALMENTE
+        docs = list(docs_map.values())
         docs.sort(key=lambda x: x.orden_aparicion if x.orden_aparicion else 0)
         
-        # 3. Construir contexto enriquecido con jerarquía
-        contexto_str = _construir_contexto_enriquecido(db, docs)
-        fuentes = [f"Pag {d.pagina}" for d in docs]
+        # Construir contexto
+        contexto_detallado = _construir_contexto_enriquecido(db, docs)
+        fuentes = list(set([f"Pag {d.pagina}" for d in docs]))[:5] # Solo mostrar 5 fuentes principales
         
-        # 4. Cargar historial de la sesión
+        # Cargar historial
         historial = _cargar_historial(db, sesion.id, limite=10)
         
-        # 4. Construir mensajes con el prompt completo de Pablo
+        # Construir Prompt Final con "Mega Contexto"
         msgs = [{"role": "system", "content": PABLO_SYSTEM_PROMPT}]
         msgs.extend(historial)
         
@@ -506,13 +519,17 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
             )
         msgs.append({"role": "user", "content": user_msg})
         
-        # 5. Llamada a Mistral
+        # Llamada a Mistral
         if client:
             rate_limiter.wait_if_needed("chat")
-            resp = client.chat.complete(model="mistral-large-latest", messages=msgs)
-            respuesta_texto = resp.choices[0].message.content
+            try:
+                resp = client.chat.complete(model="mistral-large-latest", messages=msgs)
+                respuesta_texto = resp.choices[0].message.content
+            except Exception as e:
+                print(f"Error Mistral: {e}")
+                respuesta_texto = "[Encouraging] Lo siento, tuve un pequeño lapsus técnico. ¿Podrías repetirme la pregunta?"
         else:
-            respuesta_texto = "[Neutral] Modo simulación (Sin API Key configurada)."
+            respuesta_texto = "[Neutral] Modo simulación (Sin API Key)."
 
     # Guardar historial y citas
     msg_user = MensajeChat(sesion_id=sesion.id, rol="user", texto=pregunta.texto)
@@ -520,12 +537,13 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
     
     msg_bot = MensajeChat(sesion_id=sesion.id, rol="assistant", texto=respuesta_texto)
     db.add(msg_bot)
-    db.flush() # Obtener ID del mensaje
+    db.flush() 
     
-    # Guardar Citas (Evidencia)
     if docs:
         from app.models.modelos import ChatCitas
-        for d in docs:
+        # Guardar solo las 5 más relevantes para no saturar DB
+        docs_sorted_by_score = sorted(docs, key=lambda x: getattr(x, "score_similitud", 0), reverse=True)[:5]
+        for d in docs_sorted_by_score:
             cita = ChatCitas(
                 mensaje_id=msg_bot.id,
                 base_conocimiento_id=d.id,
