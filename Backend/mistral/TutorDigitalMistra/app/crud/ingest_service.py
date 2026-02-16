@@ -87,7 +87,7 @@ def generar_estructura_temario(texto_indice: str) -> List[Dict]:
 # 3. PROCESO PRINCIPAL
 # ============================================================================
 
-def procesar_archivo_temario(db: Session, archivo_bytes: bytes, filename: str, account_id: str):
+def procesar_archivo_temario(db: Session, archivo_bytes: bytes, filename: str, account_id: str, progress_callback=None):
     """
     Flujo completo de ingestión con soporte para Libros y Lista Enlazada.
     """
@@ -96,6 +96,7 @@ def procesar_archivo_temario(db: Session, archivo_bytes: bytes, filename: str, a
     print("="*80 + "\n")
     
     # 1. Crear registro de Libro
+    if progress_callback: progress_callback("Creando registro de libro...", 5)
     try:
         print(" -> 1. Creando registro de LIBRO...")
         libro = Libro(
@@ -139,6 +140,8 @@ def procesar_archivo_temario(db: Session, archivo_bytes: bytes, filename: str, a
         if not temas_struct:
             print("    Original index not found via AI. Creating default structure.")
             temas_struct = [{"nombre": "Contenido Completo", "nivel": 1, "pagina_inicio": 1, "orden": 1}]
+            
+        if progress_callback: progress_callback("Estructura analizada. Guardando...", 10)
 
         # 4. Guardar Temario en BD
         print(" -> 4. Guardando estructura del TEMARIO...")
@@ -184,6 +187,9 @@ def procesar_archivo_temario(db: Session, archivo_bytes: bytes, filename: str, a
             # Log de progreso cada 5 temas para ver que avanza
             if i % 1 == 0: 
                 print(f"    ... Procesando tema {i+1}/{len(temas_struct)} ({temas_struct[i]['nombre']})...")
+                if progress_callback:
+                    pct = 10 + int((i / len(temas_struct)) * 75)
+                    progress_callback(f"Procesando tema {i+1}/{len(temas_struct)} ({temas_struct[i]['nombre']})...", pct)
 
             tema_actual = temas_struct[i]
             tema_db = mapa_temario[i]
@@ -245,10 +251,12 @@ def procesar_archivo_temario(db: Session, archivo_bytes: bytes, filename: str, a
         # 6. Generar Embeddings en Batch
         print(" -> 6. Llamando a OpenAI Embeddings (Batch)...")
         textos_batch = [item[1] for item in todos_chunks]
+        if progress_callback: progress_callback("Generando embeddings (BATCH)...", 85)
         vectores = generar_embeddings_batch(db, textos_batch)
         
         # 7. Guardar con Lista Enlazada (por lotes para evitar timeouts/db errors)
         print(" -> 7. Guardando en BaseConocimiento (Batch con Row-by-Row Fallback)...")
+        if progress_callback: progress_callback("Guardando en base de datos...", 90)
         
         chunks_guardados = []
         

@@ -1,4 +1,9 @@
 import asyncio
+import secrets
+import string
+from typing import List, Dict
+from datetime import datetime
+from app.schemas import schemas
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -17,6 +22,9 @@ from app.crud import tts_service
 
 # Crear las tablas automáticamente
 modelos.Base.metadata.create_all(bind=engine)
+
+# Global in-memory storage for upload progress (MVP)
+upload_progress = {}
 
 app = FastAPI(
     title="Tutor Digital API",
@@ -84,10 +92,46 @@ def _procesar_archivo_en_thread(content: bytes, filename: str, account_id: str):
     Wrapper para procesar archivo en un thread separado.
     Recibe los bytes del archivo ya leídos para evitar problemas de I/O en threads.
     """
+    # Derive title for frontend matching
+    # Must match ingest_service logic: filename.replace(".pdf", "")
+    base_title = filename.replace(".pdf", "")
+
+    def progress_callback(msg, pct):
+        print(f"[PROGRESS {account_id}] {pct}% - {msg}")
+        upload_progress[account_id] = {
+            "status": "processing",
+            "message": msg,
+            "percent": pct,
+            "filename": filename,
+            "titulo": base_title
+        }
+
     db = SessionLocal()
     try:
+        # Initialize progress
+        progress_callback("Iniciando...", 0)
+        
         # Pasamos bytes y nombre de archivo al servicio
-        return ingest_service.procesar_archivo_temario(db, content, filename, account_id)
+        result = ingest_service.procesar_archivo_temario(db, content, filename, account_id, progress_callback=progress_callback)
+        
+        # Final success state
+        upload_progress[account_id] = {
+            "status": "completed",
+            "message": "Proceso completado exitosamente",
+            "percent": 100,
+            "filename": filename,
+            "titulo": base_title
+        }
+        return result
+    except Exception as e:
+        upload_progress[account_id] = {
+            "status": "error",
+            "message": str(e),
+            "percent": 0,
+            "filename": filename,
+            "titulo": base_title
+        }
+        print(f"Error en thread de proceso: {e}")
     finally:
         db.close()
 
@@ -124,6 +168,15 @@ async def upload_syllabus(
     except Exception as e:
         print(f"Error iniciando carga: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@app.get("/upload/progress/{account_id}")
+def get_upload_progress(account_id: str):
+    """
+    Devuelve el estado actual del procesamiento de ingestión.
+    """
+    status = upload_progress.get(account_id, {"status": "idle", "message": "No hay procesos activos", "percent": 0})
+    return status
 
 
 # ============================================================================
@@ -240,6 +293,13 @@ async def text_to_speech(
 # ENDPOINTS DE VISUALIZACIÓN DE TEMARIO (INSTRUCTOR)
 # ============================================================================
 
+@app.get("/libros", response_model=List[schemas.LibroResponse])
+def get_libros(db: Session = Depends(get_db)):
+    """
+    Devuelve la lista de libros subidos.
+    """
+    return db.query(modelos.Libro).order_by(modelos.Libro.fecha_creacion.desc()).all()
+
 @app.get("/syllabus")
 def get_syllabus(db: Session = Depends(get_db)):
     """
@@ -291,3 +351,91 @@ def delete_libro(libro_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Error eliminando libro {libro_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+@app.get("/licencias/{licencia_id}/alumnos", response_model=list[schemas.AlumnoResponse])
+def listar_alumnos(licencia_id: int, db: Session = Depends(get_db)):
+    # Auto-crear licencia demo si es la 1 y no existe
+    if licencia_id == 1:
+        licencia = db.query(modelos.Licencia).filter(modelos.Licencia.id == 1).first()
+        if not licencia:
+            licencia = modelos.Licencia(
+                id=1, 
+                cliente="Demo School", 
+                max_alumnos=5, # Limite demo
+                fecha_inicio=datetime.now(),
+                fecha_fin=datetime.now(),
+                activa=True
+            )
+            db.add(licencia)
+            db.commit()
+
+    # Obtener alumnos
+    alumnos = db.query(modelos.Usuario).filter(
+        modelos.Usuario.licencia_id == licencia_id,
+        modelos.Usuario.rol == 'alumno'
+    ).all()
+    
+    # Mapeamos a respuesta
+    resultado = []
+    for a in alumnos:
+        # En este MVP, usamos password_hash como token visible
+        resultado.append(schemas.AlumnoResponse(
+            id=a.id,
+            nombre=a.nombre,
+            token=a.password_hash, 
+            activo=a.activo
+        ))
+    return resultado
+
+def _generar_token_unico(longitud=8):
+    caracteres = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(caracteres) for _ in range(longitud))
+
+@app.post("/licencias/{licencia_id}/alumnos", response_model=schemas.AlumnoResponse)
+def crear_alumno(licencia_id: int, alumno_in: schemas.AlumnoCreate, db: Session = Depends(get_db)):
+    # Verificar licencia
+    licencia = db.query(modelos.Licencia).filter(modelos.Licencia.id == licencia_id).first()
+    if not licencia:
+        if licencia_id == 1: # Auto-create logic again just in case
+             licencia = modelos.Licencia(id=1, cliente="Demo School", max_alumnos=5, fecha_inicio=datetime.now(), fecha_fin=datetime.now(), activa=True)
+             db.add(licencia)
+             db.commit()
+        else:
+            raise HTTPException(status_code=404, detail="Licencia no encontrada")
+    
+    # Verificar límite
+    count = db.query(modelos.Usuario).filter(
+        modelos.Usuario.licencia_id == licencia_id, 
+        modelos.Usuario.rol == 'alumno'
+    ).count()
+    
+    if count >= licencia.max_alumnos:
+        raise HTTPException(status_code=400, detail=f"Límite de licencia alcanzado ({licencia.max_alumnos} alumnos máx).")
+        
+    # Crear alumno
+    token = _generar_token_unico()
+    nombre_clean = "".join(c for c in alumno_in.nombre if c.isalnum()).lower()
+    email_dummy = f"{nombre_clean}_{token[:4]}@campus.local"
+    
+    nuevo_alumno = modelos.Usuario(
+        nombre=alumno_in.nombre,
+        email=email_dummy,
+        password_hash=token, # Token como pass
+        rol="alumno",
+        licencia_id=licencia_id,
+        activo=True
+    )
+    
+    try:
+        db.add(nuevo_alumno)
+        db.commit()
+        db.refresh(nuevo_alumno)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al crear alumno: {str(e)}")
+        
+    return schemas.AlumnoResponse(
+        id=nuevo_alumno.id, 
+        nombre=nuevo_alumno.nombre, 
+        token=nuevo_alumno.password_hash, 
+        activo=nuevo_alumno.activo
+    )

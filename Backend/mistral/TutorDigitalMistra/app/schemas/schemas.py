@@ -76,3 +76,20 @@ class GradeResponse(BaseModel):
 class ContenidoUpdate(BaseModel):
     """Request para actualizar el contenido de un temario manualmente."""
     contenido: str
+
+class AlumnoCreate(BaseModel):
+    nombre: str
+    licencia_id: int = 1
+
+class AlumnoResponse(BaseModel):
+    id: int
+    nombre: str
+    token: str
+    activo: bool
+
+class LibroResponse(BaseModel):
+    id: int
+    titulo: str
+    descripcion: Optional[str] = None
+    fecha_creacion: Any
+    activo: bool
