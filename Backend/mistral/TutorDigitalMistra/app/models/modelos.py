@@ -38,6 +38,7 @@ class Usuario(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     rol: Mapped[str] = mapped_column(String(50)) # 'alumno', 'admin', etc.
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=True) # Forzar cambio de pass
     fecha_creacion: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Relaciones

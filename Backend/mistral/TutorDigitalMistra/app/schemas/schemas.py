@@ -23,6 +23,11 @@ class StudentLogin(BaseModel):
     nombre: str
     token: str
 
+class ChangePassword(BaseModel):
+    user_id: int
+    old_password: str
+    new_password: str
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -96,6 +101,7 @@ class AlumnoResponse(BaseModel):
     alias: Optional[str] = None
     token: str
     activo: bool
+    must_change_password: bool = True
 
 class LibroResponse(BaseModel):
     id: int

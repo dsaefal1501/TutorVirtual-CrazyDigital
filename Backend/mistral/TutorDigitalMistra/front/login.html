@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>CrazyTeacher | Acceso</title>
+    <title>HoloMentor | Acceso</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -350,16 +350,46 @@
                     </div>
                     <div class="input-group-custom">
                         <label class="label-custom">Token de Acceso</label>
-                        <input type="password" id="token-student" class="input-field" placeholder="Token secreto"
+                        <input type="password" id="token-student" class="input-field" placeholder="Tu token de acceso"
                             required>
                         <div class="toggle-password" onclick="togglePass('token-student')">👁️</div>
                     </div>
-                    <button type="submit" class="btn-custom" id="btnLoginStudent">Entrar como Alumno</button>
+                    <div style="margin-top:20px;">
+                        <button type="submit" id="btn-login-student" class="btn-custom">Entrar como Alumno</button>
+                    </div>
                 </form>
 
                 <button class="btn-custom" style="background: #a3bfd9; margin-top:5px;" onclick="goToRecovery()">He
                     olvidado mi contraseña</button>
-                <button class="btn-ghost" onclick="goBack('view-role')" style="margin-top:15px;">← Volver</button>
+                <button class="btn-ghost" onclick="showRoleSelection()" style="margin-top:15px;">← Volver</button>
+            </div>
+
+            <!-- Cambio de Contraseña (Force) -->
+            <div id="view-change-password" class="view-section">
+                <div class="divider"><span>Cambio de Contraseña Requerido</span></div>
+                <p style="color: var(--text-light); font-size: 0.9rem; text-align: center; margin-bottom: 20px;">
+                    Es tu primer inicio de sesión. Por seguridad, debes establecer una nueva contraseña personal.
+                </p>
+
+                <form onsubmit="handleChangePassword(event)">
+                    <div class="input-group-custom">
+                        <label class="label-custom">Nueva Contraseña</label>
+                        <input type="password" id="new-password" class="input-field"
+                            placeholder="Ingresa tu nueva contraseña" required minlength="4">
+                        <div class="toggle-password" onclick="togglePass('new-password')">👁️</div>
+                    </div>
+                    <div class="input-group-custom">
+                        <label class="label-custom">Confirmar Contraseña</label>
+                        <input type="password" id="confirm-password" class="input-field"
+                            placeholder="Repite la contraseña" required minlength="4">
+                        <div class="toggle-password" onclick="togglePass('confirm-password')">👁️</div>
+                    </div>
+
+                    <div style="margin-top:20px;">
+                        <button type="submit" id="btn-change-pass" class="btn-custom">Guardar Contraseña y
+                            Entrar</button>
+                    </div>
+                </form>
             </div>
 
             <!-- Login Instructor -->
@@ -474,7 +504,7 @@
         // =============================================
         async function handleLoginStudent(e) {
             e.preventDefault();
-            const btn = document.getElementById('btnLoginStudent');
+            const btn = document.getElementById('btn-login-student');
             const userVal = document.getElementById('user-student').value;
             const tokenVal = document.getElementById('token-student').value;
 
@@ -491,22 +521,32 @@
                 if (response.ok) {
                     const data = await response.json();
 
-                    // Guardar token y datos de usuario
-                    // El backend ahora devuelve { access_token, token_type, alumno: {...} }
+                    // Guardar datos básicos
                     sessionStorage.setItem('userRole', 'student');
                     sessionStorage.setItem('userId', data.alumno.id);
                     sessionStorage.setItem('userName', data.alumno.nombre);
                     sessionStorage.setItem('userAlias', data.alumno.alias || data.alumno.nombre);
-
-                    // IMPORTANTE: Guardar JWT para persistencia
                     localStorage.setItem('authToken', data.access_token);
 
-                    // Assuming showFeedback is defined elsewhere or needs to be added.
-                    // For now, using alert as a placeholder if showFeedback is not available.
-                    alert("¡Login correcto! Redirigiendo...");
-                    setTimeout(() => {
-                        window.location.href = 'tutor.html';
-                    }, 1000);
+                    // VERIFICAR SI DEBE CAMBIAR PASS
+                    if (data.alumno.must_change_password) {
+                        // Guardar credenciales temporales en memoria ram del JS (no storage persistente)
+                        tempUserId = data.alumno.id;
+                        tempOldPass = tokenVal; // El token usado es la old pass
+
+                        // Mostrar pantalla de cambio de pass
+                        document.getElementById("view-login-student").style.display = "none";
+                        document.getElementById("view-change-password").style.display = "block";
+                        // Feedback sutil
+                        btn.innerText = "Entrar como Alumno";
+                        btn.disabled = false;
+                    } else {
+                        // Flujo normal
+                        alert("¡Login correcto! Redirigiendo...");
+                        setTimeout(() => {
+                            window.location.href = 'tutor.html';
+                        }, 1000);
+                    }
                 } else {
                     const errData = await response.json();
                     throw new Error(errData.detail || 'Error de autenticación');
@@ -518,6 +558,51 @@
                 btn.disabled = false;
             }
         }
+
+        async function handleChangePassword(e) {
+            e.preventDefault();
+            const p1 = document.getElementById("new-password").value;
+            const p2 = document.getElementById("confirm-password").value;
+            const btn = document.getElementById("btn-change-pass");
+
+            if (p1 !== p2) {
+                alert("Las contraseñas no coinciden.");
+                return;
+            }
+
+            btn.innerText = "Actualizando...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}/auth/change-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: tempUserId,
+                        old_password: tempOldPass,
+                        new_password: p1
+                    })
+                });
+
+                if (response.ok) {
+                    alert("¡Contraseña actualizada! Entrando...");
+                    // Ya tenemos el token guardado del login previo, así que solio redirigimos
+                    setTimeout(() => {
+                        window.location.href = 'tutor.html';
+                    }, 1000);
+                } else {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Error al actualizar contraseña');
+                }
+            } catch (error) {
+                alert("Error: " + error.message);
+                btn.innerText = "Guardar Contraseña y Entrar";
+                btn.disabled = false;
+            }
+        }
+
+        let tempUserId = null;
+        let tempOldPass = null;
 
         // ==================================================
         // LOGIN INSTRUCTOR — Redirige SIEMPRE a instructor.html

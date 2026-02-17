@@ -543,8 +543,27 @@ def login_student(creds: schemas.StudentLogin, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
-    # Verificar token (password_hash)
-    if user.password_hash != creds.token:
+    # Verificar credenciales
+    is_valid = False
+    
+    # CASO 1: Primer login (Token plano)
+    if user.must_change_password:
+        if user.password_hash == creds.token:
+            is_valid = True
+            
+    # CASO 2: Login normal (Contraseña hasheada)
+    else:
+        try:
+            from passlib.context import CryptContext
+            # Usar pbkdf2_sha256 que es lo que usamos al cambiar la pass
+            pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+            if pwd_context.verify(creds.token, user.password_hash):
+                is_valid = True
+        except Exception as e:
+            print(f"Error verificando hash: {e}")
+            pass
+
+    if not is_valid:
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
     # Generar JWT (subject debe ser string)
@@ -556,7 +575,8 @@ def login_student(creds: schemas.StudentLogin, db: Session = Depends(get_db)):
         nombre=user.nombre,
         alias=user.alias,
         token=user.password_hash,
-        activo=user.activo
+        activo=user.activo,
+        must_change_password=user.must_change_password
     )
 
     return schemas.Token(
@@ -564,6 +584,44 @@ def login_student(creds: schemas.StudentLogin, db: Session = Depends(get_db)):
         token_type="bearer",
         alumno=alumno_data
     )
+
+@app.post("/auth/change-password")
+def change_password(payload: schemas.ChangePassword, db: Session = Depends(get_db)):
+    user = db.query(modelos.Usuario).filter(modelos.Usuario.id == payload.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        
+    # Verificar contraseña antigua (en MVP es el token, pero si ya cambió será hash)
+    # Si must_change_password es True, asumimos que old_password es el token (texto plano)
+    # Si es False, deberíamos verificar hash. 
+    # Simplificación: Si el user.password_hash coincide con old_password (texto) o verify(old, hash)
+    
+    pwd_valid = False
+    if user.password_hash == payload.old_password:
+        pwd_valid = True
+    else:
+        # Intentar validar como hash
+        try:
+            from passlib.context import CryptContext
+            pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+            if pwd_context.verify(payload.old_password, user.password_hash):
+                pwd_valid = True
+        except:
+            pass
+            
+    if not pwd_valid:
+        raise HTTPException(status_code=401, detail="Contraseña anterior incorrecta")
+        
+    # Hashear nueva contraseña
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+    hashed_password = pwd_context.hash(payload.new_password)
+    
+    user.password_hash = hashed_password
+    user.must_change_password = False
+    db.commit()
+    
+    return {"mensaje": "Contraseña actualizada correctamente"}
 
 @app.get("/chat/history", response_model=List[Dict])
 def get_chat_history_endpoint(current_user: models.Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
