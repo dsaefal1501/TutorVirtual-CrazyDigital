@@ -72,8 +72,8 @@ async function loadChatHistory() {
 
         if (response.status === 401) {
             console.warn("Sesión expirada o inválida. Redirigiendo al login.");
-            alert("Tu sesión ha expirado (401). Verifica la consola del servidor para detalles.");
             localStorage.removeItem('authToken');
+
             window.location.href = 'login.html';
             return;
         }
@@ -111,12 +111,11 @@ function initUserProfile() {
 }
 
 function logoutUser() {
-    if (confirm("¿Estás seguro de que quieres cerrar sesión?")) {
-        localStorage.removeItem('authToken');
-        sessionStorage.clear();
-        window.location.href = 'login.html';
-    }
+    localStorage.removeItem('authToken');
+    sessionStorage.clear();
+    window.location.href = 'login.html';
 }
+
 const role = sessionStorage.getItem('userRole') || 'Alumno';
 // document.getElementById('profileRole').textContent = role; // Ya se hace en initUserProfile
 
@@ -522,8 +521,8 @@ async function processBackendResponse(text, onChunkReceived) {
 
         if (response.status === 401) {
             console.warn("Sesión expirada (401) en chat. Redirigiendo.");
-            alert("Tu sesión ha expirado. Por favor, inicia sesión nuevamente.");
             localStorage.removeItem('authToken');
+
             window.location.href = 'login.html';
             return;
         }

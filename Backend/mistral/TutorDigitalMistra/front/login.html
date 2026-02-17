@@ -361,7 +361,7 @@
 
                 <button class="btn-custom" style="background: #a3bfd9; margin-top:5px;" onclick="goToRecovery()">He
                     olvidado mi contraseña</button>
-                <button class="btn-ghost" onclick="showRoleSelection()" style="margin-top:15px;">← Volver</button>
+                <button class="btn-ghost" onclick="goBack('view-role')" style="margin-top:15px;">← Volver</button>
             </div>
 
             <!-- Cambio de Contraseña (Force) -->
@@ -541,12 +541,10 @@
                         btn.innerText = "Entrar como Alumno";
                         btn.disabled = false;
                     } else {
-                        // Flujo normal
-                        alert("¡Login correcto! Redirigiendo...");
-                        setTimeout(() => {
-                            window.location.href = 'tutor.html';
-                        }, 1000);
+                        // Flujo normal - Redirigir de inmediato
+                        window.location.href = 'tutor.html';
                     }
+
                 } else {
                     const errData = await response.json();
                     throw new Error(errData.detail || 'Error de autenticación');
@@ -585,12 +583,10 @@
                 });
 
                 if (response.ok) {
-                    alert("¡Contraseña actualizada! Entrando...");
-                    // Ya tenemos el token guardado del login previo, así que solio redirigimos
-                    setTimeout(() => {
-                        window.location.href = 'tutor.html';
-                    }, 1000);
+                    // Contraseña actualizada, redirigir de inmediato
+                    window.location.href = 'tutor.html';
                 } else {
+
                     const errData = await response.json();
                     throw new Error(errData.detail || 'Error al actualizar contraseña');
                 }

@@ -22,9 +22,9 @@
         // ---- Guard: solo Alumnos logueados pueden acceder ----
         const token = localStorage.getItem('authToken');
         if (!token) {
-            alert("No se encontró token de sesión. Redirigiendo al login.");
             window.location.href = 'login.html';
         }
+
     </script>
 </head>
 

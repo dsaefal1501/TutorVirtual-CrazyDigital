@@ -34,12 +34,16 @@
                 <button class="nav-item active" onclick="switchTab('temario')">
                     <i class="bi bi-journal-richtext"></i> <span>Temario</span>
                 </button>
-                <li class="nav-item" onclick="switchTab('alumnos')">
-                    <i class="bi bi-people"></i> Alumnos
-                </li>
-                <li class="nav-item" onclick="switchTab('uploads')">
-                    <i class="bi bi-cloud-upload"></i> Subidas
-                </li>
+                <button class="nav-item" onclick="switchTab('alumnos')">
+                    <i class="bi bi-people"></i> <span>Alumnos</span>
+                </button>
+                <button class="nav-item" onclick="switchTab('uploads')">
+                    <i class="bi bi-cloud-upload"></i> <span>Subidas</span>
+                </button>
+                <button class="nav-item" onclick="switchTab('tutor')">
+                    <i class="bi bi-robot"></i> <span>Tutor Virtual</span>
+                </button>
+
             </nav>
             <div class="sidebar-footer">
                 <div class="user-profile-simple">
@@ -120,6 +124,69 @@
                     <!-- Cards will go here -->
                 </div>
             </div>
+
+            <!-- PANEL TUTOR VIRTUAL -->
+            <div id="view-tutor" class="view-panel">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 class="h4 fw-bold m-0" style="color:var(--text-main)">Personalización del Tutor</h2>
+                    <button class="btn-premium">
+                        <i class="bi bi-check-circle"></i> Guardar Cambios
+                    </button>
+                </div>
+
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="glass-card h-100">
+                            <div class="card-title">
+                                <i class="bi bi-person-badge-fill"></i> Identidad del Tutor
+                            </div>
+                            <div class="card-body-inner">
+                                <div class="mb-4">
+                                    <label class="label">Nombre Público</label>
+                                    <input type="text" class="input" placeholder="Ej: Pablo, Elena, Mentor..."
+                                        value="Pablo">
+                                    <small class="text-muted d-block mt-1">Cómo se presentará el tutor ante los
+                                        alumnos.</small>
+                                </div>
+
+                                <div class="mb-2">
+                                    <label class="label">Género de Voz / Avatar</label>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn-glass active flex-fill" onclick="selectTutorGender(this)"><i
+                                                class="bi bi-gender-male"></i>
+                                            Masculino</button>
+                                        <button class="btn-glass flex-fill" onclick="selectTutorGender(this)"><i
+                                                class="bi bi-gender-female"></i>
+                                            Femenino</button>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="glass-card h-100">
+                            <div class="card-title">
+                                <i class="bi bi-chat-left-quote-fill"></i> Personalidad y Comportamiento
+                            </div>
+                            <div class="card-body-inner">
+                                <div class="mb-4">
+                                    <label class="label">Instrucciones de Sistema (Prompt)</label>
+                                    <textarea class="form-control" rows="6"
+                                        placeholder="Define el tono y las reglas de interacción..."></textarea>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <span class="badge bg-light text-primary border p-2">Socrático</span>
+                                    <span class="badge bg-light text-primary border p-2">Motivador</span>
+                                    <span class="badge bg-light text-primary border p-2">Formal</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
 

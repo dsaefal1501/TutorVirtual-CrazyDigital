@@ -386,8 +386,10 @@ def listar_alumnos(licencia_id: int, db: Session = Depends(get_db)):
             nombre=a.nombre,
             alias=a.alias,
             token=a.password_hash, 
-            activo=a.activo
+            activo=a.activo,
+            must_change_password=a.must_change_password
         ))
+
     return resultado
 
 def _generar_token_unico(longitud=8):

@@ -61,6 +61,16 @@ function switchTab(tabName) {
     if (tabName === 'uploads') loadUploads();
 }
 
+/**
+ * Toggles visual active state for tutor gender buttons
+ */
+function selectTutorGender(btn) {
+    const parent = btn.parentElement;
+    parent.querySelectorAll('.btn-glass').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+}
+
+
 // -------------------------------------------------------------------------
 // 2. UPLOAD LOGIC (MODAL to BOTTOM BAR)
 // -------------------------------------------------------------------------
@@ -677,19 +687,25 @@ async function loadAlumnos() {
 
                     <!-- Token Field -->
                     <div class="field-row">
-                        <div style="min-width:0; margin-right:8px;">
-                            <span class="field-label">Token</span>
-                            <div class="field-value code" id="token-${a.id}">••••••••</div>
+                        <div style="min-width:0; margin-right:8px; flex-grow:1;">
+                            <span class="field-label">Token / Acceso</span>
+                            ${a.must_change_password ?
+                    `<div class="field-value code" id="token-${a.id}">••••••••</div>` :
+                    `<div class="field-value" style="font-size: 0.75rem; color: #94a3b8; font-style: italic;">El usuario ya ha establecido una contraseña</div>`
+                }
                         </div>
-                        <div class="d-flex gap-1">
-                            <button class="btn-icon-small" onclick="toggleToken(this, 'token-${a.id}', '${a.token}')" title="Ver/Ocultar">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                            <button class="btn-icon-small" onclick="copyText('${a.token}')" title="Copiar Token">
-                                <i class="bi bi-clipboard"></i>
-                            </button>
-                        </div>
+                        ${a.must_change_password ? `
+                            <div class="d-flex gap-1">
+                                <button class="btn-icon-small" onclick="toggleToken(this, 'token-${a.id}', '${a.token}')" title="Ver/Ocultar">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                                <button class="btn-icon-small" onclick="copyText('${a.token}')" title="Copiar Token">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        ` : ''}
                     </div>
+
                 </div>
 
                 <!-- Footer Actions -->
