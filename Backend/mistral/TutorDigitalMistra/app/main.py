@@ -478,9 +478,41 @@ def delete_alumno(licencia_id: int, alumno_id: int, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail="Alumno no encontrado")
         
     try:
-        # 2. Eliminar (SQLAlchemy manejará cascades si están configurados, sino puede fallar por FKs)
-        # Si falla por integridad referencial, habrá que borrar manualmente dependencias.
-        # Asumimos que queremos borrar todo rastro del alumno.
+        # 2. Eliminar dependencias manualmente (Cascade Delete)
+        
+        # A. Telemetría y Métricas
+        db.query(modelos.MetricaConsumo).filter(modelos.MetricaConsumo.usuario_id == alumno_id).delete(synchronize_session=False)
+        db.query(modelos.LearningEvent).filter(modelos.LearningEvent.usuario_id == alumno_id).delete(synchronize_session=False)
+        
+        # B. Progreso Académico y Evaluaciones
+        db.query(modelos.IntentoAlumno).filter(modelos.IntentoAlumno.alumno_id == alumno_id).delete(synchronize_session=False)
+        db.query(modelos.TestScore).filter(modelos.TestScore.usuario_id == alumno_id).delete(synchronize_session=False)
+        db.query(modelos.ProgresoAlumno).filter(modelos.ProgresoAlumno.usuario_id == alumno_id).delete(synchronize_session=False)
+        db.query(modelos.Enrollment).filter(modelos.Enrollment.usuario_id == alumno_id).delete(synchronize_session=False)
+
+        # C. Chat (Sesiones, Mensajes, Citas)
+        # Obtener IDs de sesiones del alumno
+        sesiones = db.query(modelos.SesionChat.id).filter(modelos.SesionChat.alumno_id == alumno_id).all()
+        sesion_ids = [s.id for s in sesiones]
+        
+        if sesion_ids:
+            # Borrar Citas de mensajes en estas sesiones
+            db.query(modelos.ChatCitas).filter(
+                modelos.ChatCitas.mensaje_id.in_(
+                    db.query(modelos.MensajeChat.id).filter(modelos.MensajeChat.sesion_id.in_(sesion_ids))
+                )
+            ).delete(synchronize_session=False)
+            
+            # Borrar Mensajes de estas sesiones
+            db.query(modelos.MensajeChat).filter(modelos.MensajeChat.sesion_id.in_(sesion_ids)).delete(synchronize_session=False)
+            
+            # Borrar Sesiones
+            db.query(modelos.SesionChat).filter(modelos.SesionChat.id.in_(sesion_ids)).delete(synchronize_session=False)
+            
+        # Limpieza adicional: Mensajes huérfanos con usuario_id (por si acaso)
+        db.query(modelos.MensajeChat).filter(modelos.MensajeChat.usuario_id == alumno_id).delete(synchronize_session=False)
+
+        # 3. Eliminar Usuario final
         db.delete(alumno)
         db.commit()
     except Exception as e:
