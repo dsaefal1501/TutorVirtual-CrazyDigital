@@ -471,13 +471,8 @@ async function selectTopic(id, rowEl) {
         const data = await res.json();
         const raw = data.contenido || 'Sin contenido';
 
-        const processed = raw
-            .replace(/\r\n/g, '\n')
-            .split(/\n\n+/g)
-            .map(p => p.replace(/\n(?!\n)/g, ' '))
-            .join('\n\n');
-
-        const finalHtml = processed.replace(/\n\n/g, '<br><br>');
+        // Usamos marked para parsear markdown
+        const finalHtml = marked.parse(raw);
 
         view.innerHTML = `
             <div class="content-title-main">${data.titulo}</div>
@@ -486,9 +481,10 @@ async function selectTopic(id, rowEl) {
                     <i class="bi bi-pencil"></i> Editar
                 </button>
             </div>
-            <div class="content-body-text" style="white-space: normal; line-height:1.6; max-width:100%;">${finalHtml}</div>
+            <div class="content-body-text markdown-body" style="white-space: normal; line-height:1.6; max-width:100%;">${finalHtml}</div>
             <div class="content-meta">Bloques: ${data.bloques_count || 0}</div>
         `;
+
     } catch (e) {
         view.innerHTML = `<div class="text-danger p-4">Error: ${e.message}</div>`;
     }
