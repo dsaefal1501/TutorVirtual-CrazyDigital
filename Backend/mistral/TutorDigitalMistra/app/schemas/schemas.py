@@ -19,6 +19,15 @@ class UsuarioCreate(BaseModel):
     password: str
     licencia_id: int
 
+class StudentLogin(BaseModel):
+    nombre: str
+    token: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    alumno: 'AlumnoResponse'
+
 class ConocimientoCreate(BaseModel):
     temario_id: int
     contenido: str
@@ -84,6 +93,7 @@ class AlumnoCreate(BaseModel):
 class AlumnoResponse(BaseModel):
     id: int
     nombre: str
+    alias: Optional[str] = None
     token: str
     activo: bool
 

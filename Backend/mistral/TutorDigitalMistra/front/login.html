@@ -345,12 +345,14 @@
                 <form onsubmit="handleLoginStudent(event)">
                     <div class="input-group-custom">
                         <label class="label-custom">Usuario</label>
-                        <input type="text" class="input-field" placeholder="Tu usuario" required>
+                        <input type="text" id="user-student" class="input-field" placeholder="Tu usuario (ej: DS59102)"
+                            required>
                     </div>
                     <div class="input-group-custom">
-                        <label class="label-custom">Contraseña</label>
-                        <input type="password" id="pass-student" class="input-field" placeholder="••••••••" required>
-                        <div class="toggle-password" onclick="togglePass('pass-student')">👁️</div>
+                        <label class="label-custom">Token de Acceso</label>
+                        <input type="password" id="token-student" class="input-field" placeholder="Token secreto"
+                            required>
+                        <div class="toggle-password" onclick="togglePass('token-student')">👁️</div>
                     </div>
                     <button type="submit" class="btn-custom" id="btnLoginStudent">Entrar como Alumno</button>
                 </form>
@@ -419,6 +421,8 @@
     </div>
 
     <script>
+        const API_URL = 'http://127.0.0.1:8000'; // Ajustar según entorno
+
         function switchView(id) {
             document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
             document.getElementById(id).classList.add('active');
@@ -466,17 +470,53 @@
         }
 
         // =============================================
-        // LOGIN ALUMNO — Redirige SIEMPRE a tutor.html
+        // LOGIN ALUMNO — Fetch API Validation
         // =============================================
-        function handleLoginStudent(e) {
+        async function handleLoginStudent(e) {
             e.preventDefault();
             const btn = document.getElementById('btnLoginStudent');
-            btn.innerText = "Entrando...";
+            const userVal = document.getElementById('user-student').value;
+            const tokenVal = document.getElementById('token-student').value;
 
-            setTimeout(() => {
-                sessionStorage.setItem('userRole', 'Alumno');
-                window.location.href = "tutor.html";
-            }, 1000);
+            btn.innerText = "Validando...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}/auth/login/student`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre: userVal, token: tokenVal })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // Guardar token y datos de usuario
+                    // El backend ahora devuelve { access_token, token_type, alumno: {...} }
+                    sessionStorage.setItem('userRole', 'student');
+                    sessionStorage.setItem('userId', data.alumno.id);
+                    sessionStorage.setItem('userName', data.alumno.nombre);
+                    sessionStorage.setItem('userAlias', data.alumno.alias || data.alumno.nombre);
+
+                    // IMPORTANTE: Guardar JWT para persistencia
+                    localStorage.setItem('authToken', data.access_token);
+
+                    // Assuming showFeedback is defined elsewhere or needs to be added.
+                    // For now, using alert as a placeholder if showFeedback is not available.
+                    alert("¡Login correcto! Redirigiendo...");
+                    setTimeout(() => {
+                        window.location.href = 'tutor.html';
+                    }, 1000);
+                } else {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Error de autenticación');
+                }
+
+            } catch (error) {
+                alert("Error: " + error.message);
+                btn.innerText = "Entrar como Alumno";
+                btn.disabled = false;
+            }
         }
 
         // ==================================================

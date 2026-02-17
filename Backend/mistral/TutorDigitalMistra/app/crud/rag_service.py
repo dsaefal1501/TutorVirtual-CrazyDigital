@@ -206,7 +206,7 @@ def _construir_contexto_enriquecido(db: Session, docs: list) -> str:
     return "\n\n---\n\n".join(fragmentos)
 
 
-def _cargar_historial(db: Session, sesion_id: int, limite: int = 10) -> list:
+def _cargar_historial(db: Session, sesion_id: int, limite: int = 20) -> list:
     """Carga los últimos N mensajes de la sesión para memoria conversacional."""
     mensajes = db.query(MensajeChat).filter(
         MensajeChat.sesion_id == sesion_id
@@ -250,6 +250,19 @@ def _obtener_info_ubicacion(db: Session, temario_id: int) -> str:
         return f"Capítulo: {padre_nombre} → Sección: {tema.nombre} (Nivel {tema.nivel}, Orden {tema.orden})"
     else:
         return f"Capítulo: {tema.nombre} (Nivel {tema.nivel}, Orden {tema.orden})"
+
+
+def obtener_historial_usuario(db: Session, usuario_id: int) -> List[Dict]:
+    """Devuelve el historial completo del usuario para el frontend."""
+    sesion = db.query(SesionChat).filter(SesionChat.alumno_id == usuario_id).first()
+    if not sesion:
+        return []
+        
+    mensajes = db.query(MensajeChat).filter(
+        MensajeChat.sesion_id == sesion.id
+    ).order_by(MensajeChat.fecha.asc()).all()
+    
+    return [{"role": m.rol, "content": m.texto, "id": m.id} for m in mensajes]
 
 
 # ============================================================================
@@ -371,11 +384,16 @@ def _detectar_intencion(texto: str) -> str:
 
 def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor:
     # 1. Gestión de Sesión
-    sesion = db.query(SesionChat).filter(SesionChat.id == pregunta.sesion_id).first()
+    # Buscar sesión existente del alumno (Para persistencia)
+    sesion = None
+    if pregunta.usuario_id:
+        sesion = db.query(SesionChat).filter(SesionChat.alumno_id == pregunta.usuario_id).first()
+    
+    # Si no existe, crear nueva (vida de por vida)
     if not sesion:
         sesion = SesionChat(
             alumno_id=pregunta.usuario_id, 
-            titulo_resumen="Sesión de estudio",
+            titulo_resumen="Sesión Permanente",
             fecha_inicio=func.now()
         )
         db.add(sesion)
@@ -571,11 +589,15 @@ def preguntar_al_tutor_stream(db: Session, pregunta: PreguntaUsuario):
     # --- Modo DUDA con Streaming ---
     
     # Gestión de sesión
-    sesion = db.query(SesionChat).filter(SesionChat.id == pregunta.sesion_id).first()
+    # Gestión de sesión (Persistencia)
+    sesion = None
+    if pregunta.usuario_id:
+        sesion = db.query(SesionChat).filter(SesionChat.alumno_id == pregunta.usuario_id).first()
+
     if not sesion:
         sesion = SesionChat(
             alumno_id=pregunta.usuario_id, 
-            titulo_resumen="Sesión de estudio",
+            titulo_resumen="Sesión Permanente",
             fecha_inicio=func.now()
         )
         db.add(sesion)

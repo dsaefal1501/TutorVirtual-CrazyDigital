@@ -26,12 +26,53 @@ function loadUnity() {
 }
 
 // Iniciar Unity al cargar la página
-document.addEventListener("DOMContentLoaded", loadUnity);
+// Iniciar Unity al cargar la página
+document.addEventListener("DOMContentLoaded", () => {
+    loadUnity();
+    loadChatHistory(); // Cargar historial
+});
 
 
 // --- LÓGICA DE LA APLICACIÓN (CHAT & RECONOCIMIENTO) ---
 
-const API_URL = 'http://192.168.18.10:8000'; // Asegúrate de que esta IP sea accesible
+const API_URL = 'http://127.0.0.1:8000'; // Ajustar IP/Puerto según entorno
+
+// Obtener token JWT del almacenamiento local
+const authToken = localStorage.getItem('authToken');
+
+// Si no hay token, redirigir al login (protección básica de frontend)
+if (!authToken && window.location.pathname.endsWith('tutor.html')) {
+    window.location.href = 'login.html';
+}
+
+// Configurar headers globales
+const authHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${authToken}`
+};
+
+// Cargar historial al iniciar
+async function loadChatHistory() {
+    if (!authToken) return;
+    try {
+        const response = await fetch(`${API_URL}/chat/history`, {
+            method: 'GET',
+            headers: authHeaders
+        });
+        if (response.ok) {
+            const history = await response.json();
+            history.forEach(msg => {
+                // Mapear rol 'assistant' a 'bot' para el frontend
+                const role = msg.role === 'assistant' ? 'bot' : 'user';
+                addMessage(msg.content, role, false); // false = no scroll animation if possible
+            });
+            // Scroll al final tras cargar todo
+            scrollToBottom();
+        }
+    } catch (e) {
+        console.error("Error cargando historial:", e);
+    }
+}
 
 // Referencias del DOM
 const chatWidget = document.getElementById('chat-widget');
@@ -370,48 +411,52 @@ async function handleConversationTurn(text) {
 async function processBackendResponse(text, onChunkReceived) {
     // Si no existe el toggle en el DOM, streaming activado por defecto
     const isStream = streamToggle ? streamToggle.checked : true;
-    const endpoint = isStream ? '/ask/stream' : '/ask';
+    const endpoint = isStream ? '/ask/stream' : '/ask'; // Keep this line from original for endpoint determination
 
-    const response = await fetch(`${API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto: text, usuario_id: 2 })
-    });
+    try {
+        const payload = {
+            usuario_id: sessionStorage.getItem('userId') || 1, // Fallback a 1 si no hay, pero debería haber
+            texto: text,
+            sesion_id: null // El backend gestiona esto ahora
+        };
 
-    if (!response.ok) throw new Error("Error del servidor: " + response.status);
+        const response = await fetch(`${API_URL}/ask/stream`, { // O /ask normal
+            method: 'POST',
+            headers: authHeaders,
+            body: JSON.stringify(payload)
+        });
 
-    if (isStream) {
+        if (response.status === 401) {
+            alert("Sesión expirada. Por favor, loguéate de nuevo.");
+            window.location.href = 'login.html';
+            return;
+        }
+
+        if (!response.ok) throw new Error("Error en la respuesta del servidor");
+
         const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
+        const decoder = new TextDecoder();
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-
             const chunk = decoder.decode(value, { stream: true });
 
-            // Sistema de subtítulos sin TTS
-            if (chunk) queueBotWords(chunk);
+            if (chunk) {
+                // Call the callback for UI updates
+                onChunkReceived(chunk);
 
-            // Sistema de TTS chunked: alimentar el buffer de oraciones
-            if (ttsEnabled && chunk) {
-                feedTTSSentenceBuffer(chunk);
+                // Feed TTS buffer if enabled
+                if (ttsEnabled && typeof feedTTSSentenceBuffer === 'function') {
+                    feedTTSSentenceBuffer(chunk);
+                }
             }
-
-            onChunkReceived(chunk);
         }
-    } else {
-        const data = await response.json();
-        const result = data.respuesta || data.mensaje || JSON.stringify(data);
-
-        if (result.length > 0) queueBotWords(result);
-
-        // Para TTS chunked con respuesta no-stream, dividir en oraciones directamente
-        if (ttsEnabled && result.length > 0) {
-            feedTTSSentenceBuffer(result);
-        }
-
-        onChunkReceived(result);
+    } catch (e) {
+        console.error("Error envío:", e);
+        // Propagate error or handle it via callback if possible, 
+        // but here we might just let the caller handle UI reset
+        throw e;
     }
 }
 

@@ -3,22 +3,24 @@ import secrets
 import string
 from typing import List, Dict
 from datetime import datetime
-from app.schemas import schemas
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.db.database import get_db, engine, SessionLocal
-from app.models import modelos
 from app.schemas.schemas import (
     PreguntaUsuario, RespuestaTutor, ContenidoUpdate,
     AssessmentGenerate, AssessmentResponse,
-    GradeOpenRequest, GradeMultipleRequest, GradeResponse
+    GradeOpenRequest, GradeMultipleRequest, GradeResponse,
+    StudentLogin, AlumnoResponse
 )
+from app.schemas import schemas
+from app.models import modelos
 from app.crud import rag_service
 from app.crud import ingest_service
 from app.crud import assessment_service
 from app.crud import tts_service
+from app.auth import get_current_user
 
 # Crear las tablas automáticamente
 modelos.Base.metadata.create_all(bind=engine)
@@ -381,6 +383,7 @@ def listar_alumnos(licencia_id: int, db: Session = Depends(get_db)):
         resultado.append(schemas.AlumnoResponse(
             id=a.id,
             nombre=a.nombre,
+            alias=a.alias,
             token=a.password_hash, 
             activo=a.activo
         ))
@@ -389,6 +392,19 @@ def listar_alumnos(licencia_id: int, db: Session = Depends(get_db)):
 def _generar_token_unico(longitud=8):
     caracteres = string.ascii_letters + string.digits
     return ''.join(secrets.choice(caracteres) for _ in range(longitud))
+
+def _generar_username_estudiante(alias: str) -> str:
+    # 1. Obtener iniciales
+    parts = alias.strip().split()
+    if not parts:
+        initials = "ST" # Student
+    else:
+        initials = "".join([p[0] for p in parts if p]).upper()
+    
+    # 2. Generar 5 números aleatorios
+    digits = "".join(secrets.choice(string.digits) for _ in range(5))
+    
+    return f"{initials}{digits}"
 
 @app.post("/licencias/{licencia_id}/alumnos", response_model=schemas.AlumnoResponse)
 def crear_alumno(licencia_id: int, alumno_in: schemas.AlumnoCreate, db: Session = Depends(get_db)):
@@ -413,11 +429,19 @@ def crear_alumno(licencia_id: int, alumno_in: schemas.AlumnoCreate, db: Session 
         
     # Crear alumno
     token = _generar_token_unico()
-    nombre_clean = "".join(c for c in alumno_in.nombre if c.isalnum()).lower()
-    email_dummy = f"{nombre_clean}_{token[:4]}@campus.local"
+    
+    # Lógica de Alias y Username
+    alias_real = alumno_in.nombre
+    username_gen = _generar_username_estudiante(alias_real)
+    
+    # Asegurar unicidad (simple retry logic o confiar en la aleatoriedad con 5 digitos es 1/100000 per initials)
+    # Por simplicidad ahora confiamos en la entropía, pero idealmente se verifica DB.
+    
+    email_dummy = f"{username_gen}@campus.local"
     
     nuevo_alumno = modelos.Usuario(
-        nombre=alumno_in.nombre,
+        nombre=username_gen, # Guardamos el generado (ej: DS59102) como nombre de usuario
+        alias=alias_real,    # Guardamos el real (ej: Daniel Saez) como alias
         email=email_dummy,
         password_hash=token, # Token como pass
         rol="alumno",
@@ -436,6 +460,83 @@ def crear_alumno(licencia_id: int, alumno_in: schemas.AlumnoCreate, db: Session 
     return schemas.AlumnoResponse(
         id=nuevo_alumno.id, 
         nombre=nuevo_alumno.nombre, 
+        alias=nuevo_alumno.alias,
         token=nuevo_alumno.password_hash, 
         activo=nuevo_alumno.activo
     )
+
+@app.delete("/licencias/{licencia_id}/alumnos/{alumno_id}")
+def delete_alumno(licencia_id: int, alumno_id: int, db: Session = Depends(get_db)):
+    # 1. Verificar existencia del alumno y que pertenezca a la licencia
+    alumno = db.query(modelos.Usuario).filter(
+        modelos.Usuario.id == alumno_id,
+        modelos.Usuario.licencia_id == licencia_id,
+        modelos.Usuario.rol == 'alumno'
+    ).first()
+    
+    if not alumno:
+        raise HTTPException(status_code=404, detail="Alumno no encontrado")
+        
+    try:
+        # 2. Eliminar (SQLAlchemy manejará cascades si están configurados, sino puede fallar por FKs)
+        # Si falla por integridad referencial, habrá que borrar manualmente dependencias.
+        # Asumimos que queremos borrar todo rastro del alumno.
+        db.delete(alumno)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Error eliminando alumno {alumno_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al eliminar alumno: {str(e)}")
+        
+    return {"mensaje": "Alumno eliminado correctamente"}
+
+# ============================================================================
+# AUTHENTICATION
+# ============================================================================
+
+@app.post("/auth/login/student", response_model=schemas.Token)
+def login_student(creds: schemas.StudentLogin, db: Session = Depends(get_db)):
+    """
+    Valida credenciales de alumno y devuelve un JWT.
+    """
+    from app.auth import create_access_token # Importar aquí para evitar ciclo si fuera necesario
+
+    # Buscar usuario por nombre
+    user = db.query(modelos.Usuario).filter(
+        modelos.Usuario.nombre == creds.nombre,
+        modelos.Usuario.rol == 'alumno',
+        modelos.Usuario.activo == True
+    ).first()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+    # Verificar token (password_hash)
+    if user.password_hash != creds.token:
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+    # Generar JWT
+    access_token = create_access_token(data={"sub": user.id})
+
+    # Mapear AlumnoResponse
+    alumno_data = schemas.AlumnoResponse(
+        id=user.id,
+        nombre=user.nombre,
+        alias=user.alias,
+        token=user.password_hash,
+        activo=user.activo
+    )
+
+    return schemas.Token(
+        access_token=access_token,
+        token_type="bearer",
+        alumno=alumno_data
+    )
+
+@app.get("/chat/history", response_model=List[Dict])
+def get_chat_history_endpoint(current_user: models.Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Devuelve todo el historial del usuario logueado.
+    """
+    from app.crud import rag_service
+    return rag_service.obtener_historial_usuario(db, current_user.id)

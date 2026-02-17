@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Instructor | CrazyTeacher</title>
+    <title>Panel de Instructor | HoloMentor</title>
     <!-- Fonts & Icons -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
@@ -27,7 +27,7 @@
         <aside class="sidebar-nav">
             <div class="sidebar-logo">
                 <span class="logo-emoji">👓</span>
-                <span>CrazyTeacher</span>
+                <span>HoloMentor</span>
             </div>
             <nav class="sidebar-menu">
                 <button class="nav-item active" onclick="switchTab('temario')">
@@ -62,11 +62,11 @@
                 <!-- Header with Actions -->
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h2 class="h4 fw-bold m-0" style="color:var(--text-main)">Gestión de Temario</h2>
-                    <div>
-                        <button class="btn btn-primary rounded-pill px-3" onclick="openUploadModal()">
+                    <div class="d-flex gap-2">
+                        <button class="btn-premium" onclick="openUploadModal()">
                             <i class="bi bi-cloud-upload"></i> Subir PDF
                         </button>
-                        <button class="btn btn-outline-danger rounded-pill px-3 ms-2" onclick="handleEliminar()">
+                        <button class="btn-glass-danger" onclick="handleEliminar()">
                             <i class="bi bi-trash"></i> Borrar Todo
                         </button>
                     </div>
@@ -100,7 +100,7 @@
             <div id="view-alumnos" class="view-panel">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h2>Gestión de Alumnos</h2>
-                    <button class="btn btn-primary" onclick="handleAddAlumno()">
+                    <button class="btn-premium" onclick="handleAddAlumno()">
                         <i class="bi bi-person-plus"></i> Nuevo Alumno
                     </button>
                 </div>
@@ -111,7 +111,7 @@
             <div id="view-uploads" class="view-panel">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h2>Historial de Subidas</h2>
-                    <button class="btn btn-outline-primary" onclick="openUploadModal()">
+                    <button class="btn-glass" onclick="openUploadModal()">
                         <i class="bi bi-cloud-arrow-up"></i> Nueva Subida
                     </button>
                 </div>
@@ -149,9 +149,8 @@
                         </div>
                     </div>
                     <div class="mt-4 text-end">
-                        <button class="btn btn-secondary rounded-pill me-2"
-                            onclick="closeUploadModal()">Cancelar</button>
-                        <button type="submit" class="btn btn-primary rounded-pill" id="uploadBtn">Procesar
+                        <button class="btn-secondary-glass me-2" onclick="closeUploadModal()">Cancelar</button>
+                        <button type="submit" class="btn-premium" id="uploadBtn">Procesar
                             Temario</button>
                     </div>
                 </form>
@@ -172,9 +171,27 @@
             </p>
             <input type="text" class="delete-modal-input" id="deleteConfirmInput" placeholder="CONFIRMAR">
             <div class="delete-modal-actions">
-                <button class="btn-modal-cancel" onclick="closeDeleteModal()">Cancelar</button>
+                <button class="btn-secondary-glass" onclick="closeDeleteModal()">Cancelar</button>
                 <button class="btn-modal-delete" id="btnConfirmDelete" onclick="executeDelete()">Eliminar
                     Definitivamente</button>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- MODAL DELETE STUDENT (Custom to match CSS) -->
+    <div class="delete-modal-overlay" id="deleteStudentModalOverlay">
+        <div class="delete-modal">
+            <div class="delete-modal-icon"><i class="bi bi-trash"></i></div>
+            <h3>¿Eliminar Alumno?</h3>
+            <p>Se borrará el alumno y todo su progreso. Esta acción es irreversible.<br>Escribe
+                <strong>ELIMINAR</strong> para confirmar.
+            </p>
+            <input type="text" class="delete-modal-input" id="deleteStudentInput" placeholder="ELIMINAR">
+            <div class="delete-modal-actions">
+                <button class="btn-secondary-glass" onclick="closeDeleteStudentModal()">Cancelar</button>
+                <button class="btn-modal-delete" id="btnConfirmDeleteStudent"
+                    onclick="executeDeleteStudent()">Eliminar</button>
             </div>
         </div>
     </div>
@@ -193,9 +210,9 @@
                         placeholder="Nombre del alumno">
                 </div>
                 <div class="modal-footer border-0">
-                    <button class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancelar</button>
-                    <button class="btn btn-primary rounded-pill px-4" onclick="saveNewStudent()"
-                        id="btnSaveStudent">Crear Alumno</button>
+                    <button class="btn-secondary-glass" data-bs-dismiss="modal">Cancelar</button>
+                    <button class="btn-premium px-4" onclick="saveNewStudent()" id="btnSaveStudent">Crear
+                        Alumno</button>
                 </div>
             </div>
         </div>

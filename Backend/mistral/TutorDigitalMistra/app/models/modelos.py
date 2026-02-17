@@ -33,6 +33,7 @@ class Usuario(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     licencia_id: Mapped[int] = mapped_column(ForeignKey("licencias.id"))
     nombre: Mapped[str] = mapped_column(String(100))
+    alias: Mapped[Optional[str]] = mapped_column(String(255), nullable=True) # Nombre real del alumno
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     rol: Mapped[str] = mapped_column(String(50)) # 'alumno', 'admin', etc.
@@ -180,6 +181,7 @@ class MensajeChat(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     sesion_id: Mapped[int] = mapped_column(ForeignKey("sesiones_chat.id"))
+    usuario_id: Mapped[Optional[int]] = mapped_column(ForeignKey("usuarios.id"), nullable=True) # Nuevo campo
     rol: Mapped[str] = mapped_column(String(20)) # 'user', 'assistant', 'system'
     texto: Mapped[str] = mapped_column(Text)
     embedding: Mapped[Optional[List[float]]] = mapped_column(Vector(1536))  # OpenAI text-embedding-3-small
@@ -187,6 +189,7 @@ class MensajeChat(Base):
     fecha: Mapped[datetime] = mapped_column(DateTime, server_default=func.now()) # Fecha en la que se envio el mensaje
 
     sesion: Mapped["SesionChat"] = relationship(back_populates="mensajes")
+    usuario: Mapped["Usuario"] = relationship() # Relación directa con usuario
     # Relación con citas  
     citas: Mapped[List["ChatCitas"]] = relationship(back_populates="mensaje")
 

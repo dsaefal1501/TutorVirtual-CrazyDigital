@@ -305,7 +305,7 @@ function renderSyllabusTree(data) {
             <div class="empty-syllabus">
                 <i class="bi bi-journal-x"></i>
                 <p>Lista vacía.</p>
-                <button class="btn btn-sm btn-outline-primary" onclick="openUploadModal()">Subir PDF</button>
+                <button class="btn-glass" onclick="openUploadModal()">Subir PDF</button>
             </div>
         `;
         return;
@@ -354,6 +354,8 @@ function renderSyllabusTree(data) {
                 body.style.display = 'block';
                 toggle.className = 'bi bi-chevron-down book-toggle';
             } else {
+                body.style.display = 'none';
+                toggle.className = 'bi bi-chevron-right book-toggle';
             }
         };
 
@@ -459,7 +461,7 @@ async function selectTopic(id, rowEl) {
         view.innerHTML = `
             <div class="content-title-main">${data.titulo}</div>
             <div class="d-flex mb-4">
-                <button class="btn btn-sm btn-outline-secondary rounded-pill" onclick="enableEdit(${id})">
+                <button class="btn-glass" onclick="enableEdit(${id})">
                     <i class="bi bi-pencil"></i> Editar
                 </button>
             </div>
@@ -478,8 +480,8 @@ async function enableEdit(id) {
     view.innerHTML = `
         <h3>Editando...</h3>
         <textarea id="editArea" class="form-control mb-3" style="height:400px; font-family:monospace;">${curr}</textarea>
-        <button class="btn btn-secondary me-2" onclick="selectTopic(${id})">Cancelar</button>
-        <button class="btn btn-primary" onclick="saveContent(${id})">Guardar</button>
+        <button class="btn-secondary-glass me-2" onclick="selectTopic(${id})">Cancelar</button>
+        <button class="btn-premium" onclick="saveContent(${id})">Guardar</button>
     `;
 }
 
@@ -560,6 +562,11 @@ async function loadUploads() {
 
             const card = document.createElement('div');
             card.className = 'col-md-6 mb-3'; // Wider cards for better layout
+
+            // Delete button logic
+            const deleteDisabled = isProcessing ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : '';
+            const deleteAction = isProcessing ? '' : `onclick="deleteBook(${b.id}, '${b.titulo.replace(/'/g, "\\'")}')"`;
+
             card.innerHTML = `
                 <div class="upload-card d-flex flex-row align-items-center gap-3 p-3" style="height:auto; min-height:80px;">
                     <div class="card-icon mb-0" style="width:48px; height:48px; min-width:48px; font-size:1.4rem; background:var(--sky-100); color:var(--sky-600);">
@@ -570,7 +577,10 @@ async function loadUploads() {
                         <div class="text-muted small"><i class="bi bi-calendar3"></i> ${new Date(b.fecha_creacion).toLocaleDateString()}</div>
                         ${isProcessing ? `<div class="small text-primary mt-1 text-truncate">${message}</div>` : ''}
                     </div>
-                    <div class="flex-shrink-0 ms-2">
+                    <div class="flex-shrink-0 ms-2 d-flex align-items-center gap-3">
+                         <button class="delete-circle-btn" ${deleteDisabled} ${deleteAction} title="Eliminar Libro">
+                            <i class="bi bi-trash"></i>
+                        </button>
                         ${indicatorHtml}
                     </div>
                 </div>
@@ -582,6 +592,28 @@ async function loadUploads() {
         console.error(e);
         // Only show error if list was empty
         if (!list.children.length) list.innerHTML = `<div class="text-danger">Error: ${e.message}</div>`;
+    }
+}
+
+// -------------------------------------------------------------------------
+// 7.1 DELETE BOOK (Single)
+// -------------------------------------------------------------------------
+async function deleteBook(id, title) {
+    if (!confirm(`¿Estás seguro de que quieres eliminar el libro "${title}" y todo su contenido? Esta acción no se puede deshacer.`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/syllabus/libro/${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Error al eliminar');
+        }
+        showToast('Libro eliminado correctamente');
+        loadUploads(); // Refresh list
+        checkSyllabusStatus(); // Refresh tree if needed
+    } catch (e) {
+        showToast("Error: " + e.message, true);
     }
 }
 
@@ -606,23 +638,155 @@ async function loadAlumnos() {
         list.forEach(a => {
             const card = document.createElement('div');
             card.className = 'student-card';
+
+            const username = a.nombre;
+            const displayName = a.alias || a.nombre;
+
             card.innerHTML = `
                 <div class="student-header">
-                    <div class="student-avatar" style="background:#e0f2fe;color:#0369a1;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;">${a.nombre.charAt(0)}</div>
+                    <div class="student-avatar" style="background:#e0f2fe;color:#0369a1;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;">${displayName.charAt(0)}</div>
                     <div class="student-info">
-                        <div class="student-name fw-bold">${a.nombre}</div>
+                        <div class="student-name fw-bold text-truncate" style="max-width:140px;" title="${displayName}">${displayName}</div>
                         <div class="student-status text-success small">Activo</div>
                     </div>
                 </div>
-                <div class="mt-3 p-2 border rounded bg-light d-flex justify-content-between align-items-center">
-                    <code class="fw-bold text-dark">${a.token}</code>
-                    <button class="btn btn-sm btn-link" onclick="copyToken('${a.token}')"><i class="bi bi-clipboard"></i></button>
+                
+                <div class="mt-3">
+                    <!-- Username Field -->
+                    <div class="field-row">
+                        <div style="min-width:0; margin-right:8px;">
+                            <span class="field-label">Usuario</span>
+                            <div class="field-value" title="${username}">${username}</div>
+                        </div>
+                        <button class="btn-icon-small" onclick="copyText('${username}')" title="Copiar Usuario">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+
+                    <!-- Token Field -->
+                    <div class="field-row">
+                        <div style="min-width:0; margin-right:8px;">
+                            <span class="field-label">Token</span>
+                            <div class="field-value code" id="token-${a.id}">••••••••</div>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button class="btn-icon-small" onclick="toggleToken(this, 'token-${a.id}', '${a.token}')" title="Ver/Ocultar">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <button class="btn-icon-small" onclick="copyText('${a.token}')" title="Copiar Token">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Actions -->
+                <div class="mt-2 text-end pt-2 border-top d-flex justify-content-end">
+                    <button class="delete-circle-btn" onclick="confirmDeleteStudent(${a.id}, '${displayName}')" title="Eliminar Alumno">
+                        <i class="bi bi-trash"></i>
+                    </button>
                 </div>
             `;
             grid.appendChild(card);
         });
     } catch (e) {
         grid.innerHTML = `<div class="text-danger">Error: ${e.message}</div>`;
+    }
+}
+
+// Global variable to store the ID of the student to be deleted
+let studentToDeleteId = null;
+
+function toggleToken(btn, elementId, token) {
+    const el = document.getElementById(elementId);
+    const icon = btn.querySelector('i');
+
+    if (el.innerText === '••••••••') {
+        if (confirm('¿Quieres mostrar el token de acceso? Asegúrate de que nadie esté mirando.')) {
+            el.innerText = token;
+            icon.className = 'bi bi-eye-slash';
+            btn.style.color = 'var(--sky-600)';
+            btn.style.background = 'var(--sky-100)';
+        }
+    } else {
+        el.innerText = '••••••••';
+        icon.className = 'bi bi-eye';
+        btn.style.color = '';
+        btn.style.background = '';
+    }
+}
+
+function copyText(text) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => showToast('Copiado al portapapeles'));
+    } else {
+        prompt("Copiar:", text);
+    }
+}
+
+function confirmDeleteStudent(id, name) {
+    studentToDeleteId = id;
+    const modal = document.getElementById('deleteStudentModalOverlay');
+    const input = document.getElementById('deleteStudentInput');
+    const confirmBtn = document.getElementById('btnConfirmDeleteStudent');
+
+    // Reset state
+    input.value = '';
+    confirmBtn.classList.remove('enabled');
+    // document.querySelector('#deleteStudentModalOverlay h3').innerText = `¿Eliminar a ${name}?`; // Optional customization
+
+    modal.classList.add('open');
+    input.focus();
+
+    // Input validation listener (usa 'input' para capturar cualquier cambio)
+    input.oninput = (e) => {
+        const val = e.target.value.trim().toUpperCase(); // Asegura mayúsculas y sin espacios
+
+        if (val === 'ELIMINAR') {
+            confirmBtn.classList.add('enabled');
+            confirmBtn.style.pointerEvents = 'auto'; // Permitir clic
+            confirmBtn.style.opacity = '1';
+        } else {
+            confirmBtn.classList.remove('enabled');
+            confirmBtn.style.pointerEvents = 'none'; // Bloquear clic
+            confirmBtn.style.opacity = '0.5';
+        }
+    };
+
+    // Enter key listener
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+            const val = e.target.value.trim().toUpperCase();
+            if (val === 'ELIMINAR') {
+                executeDeleteStudent();
+            }
+        }
+    };
+}
+
+function closeDeleteStudentModal() {
+    studentToDeleteId = null;
+    document.getElementById('deleteStudentModalOverlay').classList.remove('open');
+}
+
+async function executeDeleteStudent() {
+    if (!studentToDeleteId) return;
+
+    const confirmBtn = document.getElementById('btnConfirmDeleteStudent');
+    confirmBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Eliminando...';
+
+    try {
+        const res = await fetch(`${API_URL}/licencias/1/alumnos/${studentToDeleteId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error("Error al eliminar");
+
+        showToast('Alumno eliminado');
+        closeDeleteStudentModal();
+        loadAlumnos();
+    } catch (e) {
+        showToast(e.message, true);
+        closeDeleteStudentModal();
+    } finally {
+        confirmBtn.innerHTML = 'Eliminar';
     }
 }
 
@@ -650,10 +814,7 @@ async function saveNewStudent() {
     } catch (e) { showToast(e.message, true); }
 }
 
-function copyToken(t) {
-    if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => showToast('Copiado'));
-    else prompt("Token:", t);
-}
+
 
 function showToast(msg, isError) {
     const el = document.getElementById('toast');
