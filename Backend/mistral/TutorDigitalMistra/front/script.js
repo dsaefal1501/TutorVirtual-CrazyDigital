@@ -31,7 +31,9 @@ function loadUnity() {
 // Iniciar Unity al cargar la página
 document.addEventListener("DOMContentLoaded", () => {
     loadUnity();
-    loadChatHistory(); // Cargar historial
+    loadChatHistory();
+    initUserProfile();
+    initEventListeners(); // Configurar eventos
 });
 
 
@@ -54,10 +56,16 @@ const authHeaders = {
 };
 
 // Cargar historial al iniciar
+// Cargar historial al iniciar
 async function loadChatHistory() {
-    if (!authToken) return;
     try {
-        const response = await fetch(`${API_URL}/chat/history`, {
+        const userId = getUserId();
+        if (!userId) {
+            console.warn("No authentication token found or invalid.");
+            return;
+        }
+
+        const response = await fetch(`${API_URL}/chat/history?user_id=${userId}`, { // Force user_id param if needed or rely on backend token parsing
             method: 'GET',
             headers: authHeaders
         });
@@ -84,6 +92,48 @@ async function loadChatHistory() {
         console.error("Error cargando historial:", e);
     }
 }
+
+// Cargar perfil de usuario desde sessionStorage
+function initUserProfile() {
+    const alias = sessionStorage.getItem('userAlias') || 'Usuario';
+    const role = sessionStorage.getItem('userRole') || 'Alumno';
+    const initial = alias.charAt(0).toUpperCase();
+
+    const nameEl = document.getElementById('profileName');
+    const roleEl = document.getElementById('profileRole');
+    const avatarBtn = document.getElementById('userAvatarBtn');
+    const avatarSm = document.getElementById('profileAvatarSm');
+
+    if (nameEl) nameEl.innerText = alias;
+    if (roleEl) roleEl.innerText = role;
+    if (avatarBtn) avatarBtn.innerText = initial;
+    if (avatarSm) avatarSm.innerText = initial;
+}
+
+function logoutUser() {
+    if (confirm("¿Estás seguro de que quieres cerrar sesión?")) {
+        localStorage.removeItem('authToken');
+        sessionStorage.clear();
+        window.location.href = 'login.html';
+    }
+}
+const role = sessionStorage.getItem('userRole') || 'Alumno';
+// document.getElementById('profileRole').textContent = role; // Ya se hace en initUserProfile
+
+function toggleUserMenu() {
+    const dropdown = document.getElementById('userProfileDropdown');
+    if (dropdown) dropdown.classList.toggle('open');
+}
+
+// Cerrar menú al hacer click fuera
+document.addEventListener('click', (e) => {
+    const wrapper = document.getElementById('userProfileWrapper');
+    const dropdown = document.getElementById('userProfileDropdown');
+    if (wrapper && !wrapper.contains(e.target) && dropdown && dropdown.classList.contains('open')) {
+        dropdown.classList.remove('open');
+    }
+});
+
 
 // Referencias del DOM
 const chatWidget = document.getElementById('chat-widget');
@@ -133,17 +183,27 @@ const TAG_REGEX = /(\\[.*?\\])/g; // Regex para capturar [Etiquetas]
 const SUBTITLE_MAX_WORDS = 14; // Máximo de palabras por línea de subtítulo
 
 // Configuración de Reconocimiento de Voz
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
+console.log("SpeechRecognition supported:", !!SpeechRecognition);
 if (SpeechRecognition) {
     recognition = new SpeechRecognition();
+    console.log("Recognition instance created:", recognition);
     recognition.lang = 'es-ES';
     recognition.continuous = false;
     recognition.interimResults = true;
 
     recognition.onstart = () => {
+        console.log("Recognition started");
         updateMicVisuals(true, "Escuchando...");
         clearBotSubtitles();
+    };
+
+    recognition.onerror = (event) => {
+        console.error("Recognition error:", event.error);
+        updateMicVisuals(false, "Error");
+
+        if (event.error === 'not-allowed') {
+            alert("Acceso al micrófono denegado. Por favor, asegúrate de permitir el uso del micrófono en la barra de direcciones de tu navegador y que estás usando 'localhost' o un servidor HTTPS.");
+        }
     };
 
     recognition.onend = () => {
@@ -187,49 +247,61 @@ if (SpeechRecognition) {
 
 // --- EVENT LISTENERS ---
 
-micBtn.addEventListener('click', handleMicClick);
-toggleBtn.addEventListener('click', toggleChat);
-closeChatBtn.addEventListener('click', toggleChat);
+function initEventListeners() {
+    if (micBtn) micBtn.addEventListener('click', handleMicClick);
+    if (toggleBtn) toggleBtn.addEventListener('click', toggleChat);
+    if (closeChatBtn) closeChatBtn.addEventListener('click', toggleChat);
 
-chatForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (userInput.value.trim()) handleSendMessage(userInput.value.trim());
-});
-
-// TTS toggle
-if (ttsToggle) {
-    ttsToggle.addEventListener('change', () => {
-        ttsEnabled = ttsToggle.checked;
-        const speedControl = document.getElementById('ttsSpeedControl');
-        if (speedControl) speedControl.style.opacity = ttsEnabled ? '1' : '0.4';
-        if (!ttsEnabled) stopTTS();
-    });
-}
-
-// TTS speed slider
-const ttsSpeedSlider = document.getElementById('ttsSpeed');
-const ttsSpeedLabel = document.getElementById('ttsSpeedLabel');
-if (ttsSpeedSlider) {
-    ttsSpeedSlider.addEventListener('input', () => {
-        ttsSpeed = parseFloat(ttsSpeedSlider.value);
-        if (ttsSpeedLabel) ttsSpeedLabel.textContent = ttsSpeed.toFixed(1) + 'x';
-    });
-}
-
-userInput.addEventListener('input', autoResizeInput);
-
-userInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (userInput.value.trim()) handleSendMessage(userInput.value.trim());
+    if (chatForm) {
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (userInput.value.trim()) handleSendMessage(userInput.value.trim());
+        });
     }
-});
+
+    if (userInput) {
+        userInput.addEventListener('input', autoResizeInput);
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (userInput.value.trim()) handleSendMessage(userInput.value.trim());
+            }
+        });
+    }
+
+    // TTS Control
+    if (ttsToggle) {
+        ttsToggle.addEventListener('change', () => {
+            ttsEnabled = ttsToggle.checked;
+            const speedControl = document.getElementById('ttsSpeedControl');
+            if (speedControl) speedControl.style.opacity = ttsEnabled ? '1' : '0.4';
+            if (!ttsEnabled) stopTTS();
+        });
+    }
+
+    // TTS Speed Slider removed
+    // if (ttsSpeedSlider) {
+    //     ttsSpeedSlider.addEventListener('input', () => {
+    //         ttsSpeed = parseFloat(ttsSpeedSlider.value);
+    //         if (ttsSpeedLabel) ttsSpeedLabel.textContent = ttsSpeed.toFixed(1) + 'x';
+    //     });
+    // }
+}
 
 
 // --- FUNCIONES LÓGICAS ---
 
 function handleMicClick() {
-    if (!recognition) return alert("Navegador no compatible");
+    console.log("Mic clicked. isChatOpen:", isChatOpen, "isConversationMode:", isConversationMode, "recognition:", !!recognition);
+    if (!recognition) {
+        alert("Tu navegador no soporta reconocimiento de voz o no se pudo inicializar.");
+        return;
+    }
+
+    // Feedback visual inmediato
+    micBtn.classList.add('active-press');
+    setTimeout(() => micBtn.classList.remove('active-press'), 200);
+
     if (isChatOpen) {
         if (micBtn.classList.contains('is-listening')) recognition.stop();
         else recognition.start();
@@ -272,10 +344,12 @@ function stopConversationMode() {
     botIsSpeaking = false;
     clearBotSubtitles();
     try { recognition.stop(); } catch (e) { }
-    updateMicVisuals(false, "Escuchando...");
+    updateMicVisuals(false, "Pausado");
 }
 
 function updateMicVisuals(listening, text) {
+    console.log(`[Mic Visuals] listening=${listening}, text="${text}"`);
+    if (!micLabel || !micBtn || !micIcon) return;
     micLabel.innerText = text;
     if (listening) {
         micBtn.classList.add('is-listening');
@@ -427,8 +501,15 @@ async function processBackendResponse(text, onChunkReceived) {
     const endpoint = isStream ? '/ask/stream' : '/ask'; // Keep this line from original for endpoint determination
 
     try {
+        const userId = getUserId();
+        if (!userId) {
+            alert("Error de sesión: No se pudo identificar al usuario. Por favor, inicia sesión de nuevo.");
+            window.location.href = 'login.html';
+            return;
+        }
+
         const payload = {
-            usuario_id: sessionStorage.getItem('userId') || 1, // Fallback a 1 si no hay, pero debería haber
+            usuario_id: userId,
             texto: text,
             sesion_id: null // El backend gestiona esto ahora
         };
@@ -944,6 +1025,10 @@ async function playNextTTSChunk() {
     if (window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
     updateMicVisuals(false, "Hablando...");
 
+    playTTSChunk(chunk);
+} // Cierre de playNextTTSChunk
+
+function playTTSChunk(chunk) {
     // Crear y reproducir el audio
     const audioUrl = URL.createObjectURL(chunk.audioBlob);
     const audio = new Audio(audioUrl);
@@ -1067,6 +1152,8 @@ function stopTTS() {
         currentAudio.currentTime = 0;
         currentAudio = null;
     }
+    window.speechSynthesis.cancel();
+
     if (currentAudioUrl) {
         URL.revokeObjectURL(currentAudioUrl);
         currentAudioUrl = null;
@@ -1075,4 +1162,33 @@ function stopTTS() {
 
     // Resetear el flag de abort para la próxima vez
     setTimeout(() => { ttsAborted = false; }, 50);
+}
+
+// --- UTILIDADES ---
+function getUserId() {
+    // 1. Intentar desde sessionStorage
+    let uid = sessionStorage.getItem('userId');
+    if (uid) return parseInt(uid, 10);
+
+    // 2. Intentar recuperar del Token JWT
+    const token = localStorage.getItem('authToken');
+    if (token) {
+        try {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            const payload = JSON.parse(jsonPayload);
+
+            if (payload.sub) {
+                console.log("UserID recuperado del token:", payload.sub);
+                sessionStorage.setItem('userId', payload.sub);
+                return parseInt(payload.sub, 10);
+            }
+        } catch (e) {
+            console.error("Error parseando token:", e);
+        }
+    }
+    return null;
 }

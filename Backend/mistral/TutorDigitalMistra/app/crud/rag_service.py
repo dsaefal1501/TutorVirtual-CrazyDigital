@@ -20,7 +20,8 @@ except ImportError:
 
 # Configuración del Cliente Mistral
 api_key = os.getenv("MISTRAL_API_KEY")
-agent_id = "ag_019c417c78a875a6abb18436607fae73" # Tu ID de agente
+agent_id = os.getenv("MISTRAL_AGENT_ID", "ag_019c417c78a875a6abb18436607fae73") 
+DEFAULT_MODEL = os.getenv("LLM_MODEL", "mistral-large-latest")
 
 if api_key and Mistral:
     client = Mistral(api_key=api_key)
@@ -441,7 +442,7 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
             
             if client:
                 rate_limiter.wait_if_needed("chat")
-                resp = client.chat.complete(model="mistral-large-latest", messages=msgs)
+                resp = client.chat.complete(model=DEFAULT_MODEL, messages=msgs)
                 respuesta_texto = resp.choices[0].message.content
             else:
                 # Fallback sin API: mostrar contenido directo
@@ -531,7 +532,7 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
         else:
             user_msg = (
                 f"CONTEXTO DEL LIBRO (usa este contenido LITERAL para responder):\n"
-                f"{contexto_str}\n\n"
+                f"{contexto_detallado}\n\n"
                 f"PREGUNTA DEL ALUMNO: {pregunta.texto}"
             )
         msgs.append({"role": "user", "content": user_msg})
@@ -540,7 +541,7 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
         if client:
             rate_limiter.wait_if_needed("chat")
             try:
-                resp = client.chat.complete(model="mistral-large-latest", messages=msgs)
+                resp = client.chat.complete(model=DEFAULT_MODEL, messages=msgs)
                 respuesta_texto = resp.choices[0].message.content
             except Exception as e:
                 print(f"Error Mistral: {e}")
@@ -642,13 +643,27 @@ def preguntar_al_tutor_stream(db: Session, pregunta: PreguntaUsuario):
     
     if client:
         rate_limiter.wait_if_needed("stream")
-        stream = client.chat.stream(model="mistral-large-latest", messages=msgs)
+        stream = client.chat.stream(model=DEFAULT_MODEL, messages=msgs)
         full_text = ""
         for chunk in stream:
-            content = chunk.data.choices[0].delta.content
-            if content:
-                full_text += content
-                yield content
+            try:
+                # La estructura de Mistral devuelve CompletionEvent con .data que contiene el payload
+                if hasattr(chunk, 'data'):
+                    response_obj = chunk.data
+                else:
+                    response_obj = chunk
+
+                # Acceder al contenido de manera segura
+                content = response_obj.choices[0].delta.content
+                if content:
+                    full_text += content
+                    yield content
+            except AttributeError as e:
+                print(f"Error procesando chunk Mistral: {e} | Chunk dir: {dir(chunk)}")
+                continue
+            except Exception as e:
+                print(f"Error inesperado en stream: {e}")
+                continue
         
         # Guardar al finalizar
         db.add(MensajeChat(sesion_id=sesion.id, rol="user", texto=pregunta.texto))
