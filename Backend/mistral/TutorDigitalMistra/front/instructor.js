@@ -352,8 +352,7 @@ function renderSyllabusTree(data) {
         });
         roots.sort((a, b) => (a.orden || 0) - (b.orden || 0));
 
-        const bookRoot = roots[0];
-        const bookName = bookRoot ? bookRoot.nombre : 'Libro ' + bid;
+        const bookName = items[0].libro_titulo || ('Libro ' + bid);
 
         const wrapper = document.createElement('div');
         wrapper.className = 'book-wrapper mb-3';

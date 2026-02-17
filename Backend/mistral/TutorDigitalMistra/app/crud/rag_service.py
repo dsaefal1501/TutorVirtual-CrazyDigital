@@ -719,8 +719,9 @@ def sincronizar_temario_a_conocimiento(db: Session) -> int:
 def obtener_jerarquia_temario(db: Session) -> List[Dict]:
     """
     Devuelve la lista completa de temas ordenada para construir el árbol UI.
+    Incluye el título del libro asociado.
     """
-    temas = db.query(Temario).order_by(Temario.nivel, Temario.orden).all()
+    temas = db.query(Temario).options(joinedload(Temario.libro)).order_by(Temario.nivel, Temario.orden).all()
     if not temas:
         return []
     
@@ -732,11 +733,14 @@ def obtener_jerarquia_temario(db: Session) -> List[Dict]:
             "nivel": t.nivel,
             "orden": t.orden,
             "parent_id": t.parent_id,
-            "libro_id": t.libro_id
+            "libro_id": t.libro_id,
+            "libro_titulo": t.libro.titulo if t.libro else f"Libro {t.libro_id}"
         })
     
-    resultado.sort(key=lambda x: x["id"])
+    # Mantenemos el orden original por ID o nivel para la estabilidad
+    resultado.sort(key=lambda x: (x["libro_id"] if x["libro_id"] else 0, x["nivel"], x["orden"]))
     return resultado
+
 
 
 def _obtener_ids_recursivos(db: Session, temario_id: int) -> List[int]:
