@@ -338,6 +338,23 @@ def update_syllabus_content(temario_id: int, req: ContenidoUpdate, db: Session =
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.put("/libros/{libro_id}")
+def update_libro(libro_id: int, req: schemas.LibroUpdate, db: Session = Depends(get_db)):
+    """
+    Renombra un libro.
+    """
+    try:
+        resultado = rag_service.actualizar_libro(db, libro_id, req.titulo)
+        if "error" in resultado:
+            raise HTTPException(status_code=404, detail=resultado["error"])
+        return resultado
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error actualizando libro {libro_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/syllabus/libro/{libro_id}")
 def delete_libro(libro_id: int, db: Session = Depends(get_db)):
     """

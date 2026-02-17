@@ -596,6 +596,7 @@ async function loadUploads() {
             // Delete button logic
             const deleteDisabled = isProcessing ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : '';
             const deleteAction = isProcessing ? '' : `onclick="deleteBook(${b.id}, '${b.titulo.replace(/'/g, "\\'")}')"`;
+            const editAction = isProcessing ? '' : `onclick="openEditBook(${b.id}, '${b.titulo.replace(/'/g, "\\'")}')"`;
 
             card.innerHTML = `
                 <div class="upload-card d-flex flex-row align-items-center gap-3 p-3" style="height:auto; min-height:80px;">
@@ -607,7 +608,10 @@ async function loadUploads() {
                         <div class="text-muted small"><i class="bi bi-calendar3"></i> ${new Date(b.fecha_creacion).toLocaleDateString()}</div>
                         ${isProcessing ? `<div class="small text-primary mt-1 text-truncate">${message}</div>` : ''}
                     </div>
-                    <div class="flex-shrink-0 ms-2 d-flex align-items-center gap-3">
+                    <div class="flex-shrink-0 ms-2 d-flex align-items-center gap-2">
+                         <button class="delete-circle-btn" ${deleteDisabled} ${editAction} title="Editar Libro" style="color:var(--primary-600); background:var(--primary-50);">
+                            <i class="bi bi-pencil"></i>
+                        </button>
                          <button class="delete-circle-btn" ${deleteDisabled} ${deleteAction} title="Eliminar Libro">
                             <i class="bi bi-trash"></i>
                         </button>
@@ -626,7 +630,66 @@ async function loadUploads() {
 }
 
 // -------------------------------------------------------------------------
-// 7.1 DELETE BOOK (Single)
+// 7.1 EDIT BOOK
+// -------------------------------------------------------------------------
+function openEditBook(id, title) {
+    const panel = document.getElementById('edit-book-panel');
+    const list = document.getElementById('uploads-list');
+    const input = document.getElementById('editBookTitle');
+    const idInput = document.getElementById('editBookId');
+
+    if (panel && list && input && idInput) {
+        input.value = title;
+        idInput.value = id;
+        panel.style.display = 'block';
+        list.style.opacity = '0.3';
+        list.style.pointerEvents = 'none';
+
+        // Scroll to top of panel
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(() => input.focus(), 100);
+    }
+}
+
+function cancelEditBook() {
+    const panel = document.getElementById('edit-book-panel');
+    const list = document.getElementById('uploads-list');
+    if (panel) panel.style.display = 'none';
+    if (list) {
+        list.style.opacity = '1';
+        list.style.pointerEvents = 'all';
+    }
+}
+
+async function saveBookTitle() {
+    const id = document.getElementById('editBookId').value;
+    const title = document.getElementById('editBookTitle').value.trim();
+
+    if (!title) return showToast('El título no puede estar vacío', true);
+
+    try {
+        const res = await fetch(`${API_URL}/libros/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ titulo: title })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Error al actualizar');
+        }
+
+        showToast('Título actualizado');
+        cancelEditBook();
+        loadUploads(); // Refresh list
+    } catch (e) {
+        showToast("Error: " + e.message, true);
+    }
+}
+
+
+// -------------------------------------------------------------------------
+// 7.2 DELETE BOOK (Single)
 // -------------------------------------------------------------------------
 async function deleteBook(id, title) {
     if (!confirm(`¿Estás seguro de que quieres eliminar el libro "${title}" y todo su contenido? Esta acción no se puede deshacer.`)) {

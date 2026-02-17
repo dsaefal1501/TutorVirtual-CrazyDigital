@@ -110,6 +110,9 @@ class LibroResponse(BaseModel):
     fecha_creacion: Any
     activo: bool
 
+class LibroUpdate(BaseModel):
+    titulo: str
+
 class LicenciaResponse(BaseModel):
     id: int
     cliente: str

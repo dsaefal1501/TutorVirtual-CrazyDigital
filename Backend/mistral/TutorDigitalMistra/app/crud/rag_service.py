@@ -796,6 +796,20 @@ def obtener_contenido_tema(db: Session, temario_id: int, recursivo: bool = True)
     }
 
 
+def actualizar_libro(db: Session, libro_id: int, nuevo_titulo: str) -> Dict:
+    """
+    Actualiza el título de un libro.
+    """
+    libro = db.query(Libro).filter(Libro.id == libro_id).first()
+    if not libro:
+        return {"error": "Libro no encontrado"}
+    
+    libro.titulo = nuevo_titulo
+    db.commit()
+    db.refresh(libro)
+    return {"mensaje": "Libro actualizado", "libro": {"id": libro.id, "titulo": libro.titulo}}
+
+
 def actualizar_contenido_tema(db: Session, temario_id: int, nuevo_contenido: str) -> Dict:
     """
     Actualiza el contenido de un tema específico.
