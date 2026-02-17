@@ -480,7 +480,8 @@ function updateUserSubtitle(text) {
     subtitleText.className = "subtitle-text subtitle-user";
     const words = text.trim().split(/\s+/);
     const lastWords = words.length > 10 ? words.slice(-10) : words;
-    subtitleText.innerText = lastWords.join(" ");
+    const textToDisplay = lastWords.join(" ");
+    subtitleText.innerHTML = typeof marked !== 'undefined' ? marked.parseInline(textToDisplay) : textToDisplay;
 }
 
 // --- LÓGICA DE SUBTÍTULOS INTELIGENTE (Detecta [Tag] vs Texto) ---
@@ -570,7 +571,7 @@ function processBotSubtitleQueue() {
 
     const textToShow = batch.join(" ");
     subtitleText.className = "subtitle-text subtitle-bot";
-    subtitleText.innerText = textToShow;
+    subtitleText.innerHTML = typeof marked !== 'undefined' ? marked.parseInline(textToShow) : textToShow;
 
     const duration = Math.max(MIN_TIME_ON_SCREEN_MS, batch.length * TIME_PER_WORD_MS);
 
@@ -618,7 +619,7 @@ function updateBotMessage(id, cleanText) {
     const content = el.querySelector('.message-content');
     // Limpiar etiquetas de emoción durante el streaming
     const textToDisplay = cleanText.replace(/\[.*?\]\s*/g, '');
-    content.innerText = textToDisplay;
+    content.innerHTML = typeof marked !== 'undefined' ? marked.parse(textToDisplay) : textToDisplay;
     scrollToBottom();
 }
 
@@ -1029,7 +1030,7 @@ function showSyncedSubtitles(words, audioDurationSec, emotionTags = []) {
         setTimeout(() => {
             if (ttsAborted) return;
             subtitleText.className = "subtitle-text subtitle-bot";
-            subtitleText.innerText = groupText;
+            subtitleText.innerHTML = typeof marked !== 'undefined' ? marked.parseInline(groupText) : groupText;
         }, elapsed);
 
         elapsed += groupDuration;

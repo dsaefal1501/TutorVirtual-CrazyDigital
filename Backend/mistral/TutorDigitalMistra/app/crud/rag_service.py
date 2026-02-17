@@ -389,16 +389,13 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
     if pregunta.usuario_id:
         sesion = db.query(SesionChat).filter(SesionChat.alumno_id == pregunta.usuario_id).first()
     
-    # Si no existe, crear nueva (vida de por vida)
-    if not sesion:
-        sesion = SesionChat(
-            alumno_id=pregunta.usuario_id, 
-            titulo_resumen="Sesión Permanente",
-            fecha_inicio=func.now()
-        )
-        db.add(sesion)
         db.commit()
         db.refresh(sesion)
+    
+    # Obtener nombre del alumno para contexto
+    alumno = db.query(Usuario).filter(Usuario.id == pregunta.usuario_id).first()
+    alumno_nombre = alumno.alias if alumno and alumno.alias else (alumno.nombre if alumno else "Alumno")
+    alias_context = f"SITUACIÓN: El alumno con el que hablas se llama {alumno_nombre}. Ya le conoces."
     
     intencion = _detectar_intencion(pregunta.texto)
     respuesta_texto = ""
@@ -438,6 +435,7 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
             )
             
             msgs = [{"role": "system", "content": PABLO_SYSTEM_PROMPT}]
+            msgs.append({"role": "system", "content": alias_context})
             msgs.extend(historial)
             msgs.append({"role": "user", "content": prompt_contenido})
             
@@ -518,6 +516,7 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
         
         # Construir Prompt Final con "Mega Contexto"
         msgs = [{"role": "system", "content": PABLO_SYSTEM_PROMPT}]
+        msgs.append({"role": "system", "content": alias_context})
         msgs.extend(historial)
         
         user_msg = ""
@@ -604,6 +603,11 @@ def preguntar_al_tutor_stream(db: Session, pregunta: PreguntaUsuario):
         db.commit()
         db.refresh(sesion)
     
+    # Obtener nombre del alumno para contexto (Stream)
+    alumno = db.query(Usuario).filter(Usuario.id == pregunta.usuario_id).first()
+    alumno_nombre = alumno.alias if alumno and alumno.alias else (alumno.nombre if alumno else "Alumno")
+    alias_context = f"SITUACIÓN: El alumno con el que hablas se llama {alumno_nombre}. Ya le conoces."
+    
     # Buscar contexto RAG
     vector = generar_embedding(db, pregunta.texto)
     docs = db.execute(
@@ -619,6 +623,7 @@ def preguntar_al_tutor_stream(db: Session, pregunta: PreguntaUsuario):
     
     # Construir mensajes con Pablo completo
     msgs = [{"role": "system", "content": PABLO_SYSTEM_PROMPT}]
+    msgs.append({"role": "system", "content": alias_context})
     msgs.extend(historial)
     
     if not docs:
