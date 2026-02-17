@@ -1,5 +1,6 @@
 /* instructor.js */
 const API_URL = 'http://192.168.18.10:8000';
+let licenseStatus = { current: 0, max: 0 };
 
 // ---- DOM References ----
 const uploadForm = document.getElementById('uploadForm');
@@ -17,6 +18,15 @@ const progressBar = document.getElementById('progressBar');
 // ---- Initialization ----
 document.addEventListener('DOMContentLoaded', () => {
     checkSyllabusStatus();
+
+    // Restore active tab
+    const savedTab = localStorage.getItem('instructorActiveTab');
+    if (savedTab) {
+        switchTab(savedTab);
+    } else {
+        // Default call to ensuring everything initializes correctly
+        switchTab('temario');
+    }
 
     // Delete Input Validation
     const deleteInput = document.getElementById('deleteConfirmInput');
@@ -46,6 +56,9 @@ function logoutUser() {
 // 1. TABS & NAVIGATION
 // -------------------------------------------------------------------------
 function switchTab(tabName) {
+    // Save state
+    localStorage.setItem('instructorActiveTab', tabName);
+
     document.querySelectorAll('.nav-item').forEach(btn => {
         if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(tabName)) btn.classList.add('active');
         else btn.classList.remove('active');
@@ -639,12 +652,37 @@ async function deleteBook(id, title) {
 // -------------------------------------------------------------------------
 async function loadAlumnos() {
     const grid = document.getElementById('alumnos-grid');
+    const badge = document.getElementById('student-limit-badge');
     if (!grid) return;
     grid.innerHTML = '<div class="spinner-border text-primary"></div>';
 
     try {
-        const res = await fetch(`${API_URL}/licencias/1/alumnos`);
-        const list = await res.json();
+        const [resAlumnos, resLicencia] = await Promise.all([
+            fetch(`${API_URL}/licencias/1/alumnos`),
+            fetch(`${API_URL}/licencias/1`)
+        ]);
+
+        const list = await resAlumnos.json();
+        const licencia = await resLicencia.json();
+
+        // Actualizar estado global para validaciones
+        licenseStatus.current = list.length;
+        licenseStatus.max = licencia.max_alumnos;
+
+        // Actualizar el badge de límite
+        if (badge && licencia) {
+            badge.innerText = `${list.length} / ${licencia.max_alumnos} Alumnos`;
+            // Cambiar color si se llega al límite
+            if (list.length >= licencia.max_alumnos) {
+                badge.style.background = 'rgba(239, 68, 68, 0.1)';
+                badge.style.color = '#dc2626';
+                badge.style.borderColor = '#fecaca';
+            } else {
+                badge.style.background = 'rgba(14, 165, 233, 0.1)';
+                badge.style.color = 'var(--primary-600)';
+                badge.style.borderColor = 'var(--primary-100)';
+            }
+        }
 
         grid.innerHTML = '';
         if (!list.length) {
@@ -814,7 +852,15 @@ async function executeDeleteStudent() {
 }
 
 function handleAddAlumno() {
-    new bootstrap.Modal(document.getElementById('addStudentModal')).show();
+    if (licenseStatus.current >= licenseStatus.max && licenseStatus.max > 0) {
+        document.getElementById('limitReachedModalOverlay').classList.add('open');
+    } else {
+        new bootstrap.Modal(document.getElementById('addStudentModal')).show();
+    }
+}
+
+function closeLimitModal() {
+    document.getElementById('limitReachedModalOverlay').classList.remove('open');
 }
 
 async function saveNewStudent() {

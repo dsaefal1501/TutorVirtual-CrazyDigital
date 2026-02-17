@@ -104,7 +104,13 @@
             <!-- PANEL ALUMNOS -->
             <div id="view-alumnos" class="view-panel">
                 <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h2>Gestión de Alumnos</h2>
+                    <div class="d-flex align-items-center gap-3">
+                        <h2 class="m-0">Gestión de Alumnos</h2>
+                        <span id="student-limit-badge" class="badge rounded-pill px-3 py-2"
+                            style="background: rgba(14, 165, 233, 0.1); color: var(--primary-600); border: 1px solid var(--primary-100); font-weight: 700;">
+                            Cargando...
+                        </span>
+                    </div>
                     <button class="btn-premium" onclick="handleAddAlumno()">
                         <i class="bi bi-person-plus"></i> Nuevo Alumno
                     </button>
@@ -292,6 +298,23 @@
             </div>
         </div>
     </div>
+
+    <!-- MODAL LIMIT REACHED (Custom) -->
+    <div class="delete-modal-overlay" id="limitReachedModalOverlay">
+        <div class="delete-modal" style="border-top-color: var(--primary-500);">
+            <div class="delete-modal-icon" style="background: rgba(14, 165, 233, 0.1); color: var(--primary-600);">
+                <i class="bi bi-person-x"></i>
+            </div>
+            <h3>Límite de Alumnos Alcanzado</h3>
+            <p>Has alcanzado el máximo de alumnos permitidos por tu licencia actual.<br>
+                Para añadir más alumnos, por favor contacta con soporte o mejora tu plan.
+            </p>
+            <div class="delete-modal-actions">
+                <button class="btn-premium w-100" onclick="closeLimitModal()">Entendido</button>
+            </div>
+        </div>
+    </div>
+
 
     <!-- BOTTOM TOAST / SNACKBAR FOR UPLOAD PROGRESS -->
     <div id="processingStatusContainer" class="upload-snackbar">

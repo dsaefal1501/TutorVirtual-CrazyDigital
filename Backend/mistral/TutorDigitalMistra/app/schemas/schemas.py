@@ -109,3 +109,10 @@ class LibroResponse(BaseModel):
     descripcion: Optional[str] = None
     fecha_creacion: Any
     activo: bool
+
+class LicenciaResponse(BaseModel):
+    id: int
+    cliente: str
+    max_alumnos: int
+    activa: bool
+

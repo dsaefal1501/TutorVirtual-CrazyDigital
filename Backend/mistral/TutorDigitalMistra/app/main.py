@@ -354,6 +354,13 @@ def delete_libro(libro_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Error eliminando libro {libro_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+@app.get("/licencias/{licencia_id}", response_model=schemas.LicenciaResponse)
+def obtener_licencia(licencia_id: int, db: Session = Depends(get_db)):
+    licencia = db.query(modelos.Licencia).filter(modelos.Licencia.id == licencia_id).first()
+    if not licencia:
+        raise HTTPException(status_code=404, detail="Licencia no encontrada")
+    return licencia
+
 @app.get("/licencias/{licencia_id}/alumnos", response_model=list[schemas.AlumnoResponse])
 def listar_alumnos(licencia_id: int, db: Session = Depends(get_db)):
     # Auto-crear licencia demo si es la 1 y no existe
