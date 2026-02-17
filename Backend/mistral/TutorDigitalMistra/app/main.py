@@ -547,8 +547,8 @@ def login_student(creds: schemas.StudentLogin, db: Session = Depends(get_db)):
     if user.password_hash != creds.token:
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
-    # Generar JWT
-    access_token = create_access_token(data={"sub": user.id})
+    # Generar JWT (subject debe ser string)
+    access_token = create_access_token(data={"sub": str(user.id)})
 
     # Mapear AlumnoResponse
     alumno_data = schemas.AlumnoResponse(

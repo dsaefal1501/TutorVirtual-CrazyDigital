@@ -59,6 +59,15 @@ async function loadChatHistory() {
             method: 'GET',
             headers: authHeaders
         });
+
+        if (response.status === 401) {
+            console.warn("Sesión expirada o inválida. Redirigiendo al login.");
+            alert("Tu sesión ha expirado (401). Verifica la consola del servidor para detalles.");
+            localStorage.removeItem('authToken');
+            window.location.href = 'login.html';
+            return;
+        }
+
         if (response.ok) {
             const history = await response.json();
             history.forEach(msg => {
@@ -427,7 +436,9 @@ async function processBackendResponse(text, onChunkReceived) {
         });
 
         if (response.status === 401) {
-            alert("Sesión expirada. Por favor, loguéate de nuevo.");
+            console.warn("Sesión expirada (401) en chat. Redirigiendo.");
+            alert("Tu sesión ha expirado. Por favor, inicia sesión nuevamente.");
+            localStorage.removeItem('authToken');
             window.location.href = 'login.html';
             return;
         }
