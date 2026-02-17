@@ -216,6 +216,8 @@ if (ttsSpeedSlider) {
     });
 }
 
+userInput.addEventListener('input', autoResizeInput);
+
 userInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();

@@ -166,14 +166,14 @@ html {
 .float-btn {
     position: fixed;
     bottom: 28px;
-    height: 62px;
-    width: 62px;
+    height: 60px;
+    width: 60px;
     border-radius: 50%;
-    border: 3px solid rgba(255, 255, 255, 0.85);
-    background: linear-gradient(145deg, #ffffff 0%, var(--sky-300) 100%);
-    color: var(--sky-600);
-    box-shadow: 0 6px 22px rgba(60, 130, 200, 0.30),
-        inset 0 2px 4px rgba(255, 255, 255, 0.6);
+    border: 2.5px solid rgba(255, 255, 255, 0.75);
+    background: linear-gradient(135deg, var(--sky-400), var(--sky-600));
+    color: #fff;
+    box-shadow: 0 6px 22px rgba(60, 130, 200, 0.25),
+        inset 0 1px 3px rgba(255, 255, 255, 0.4);
     transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
     display: flex;
     align-items: center;
@@ -182,7 +182,7 @@ html {
     z-index: 1002;
     padding: 0;
     overflow: hidden;
-    font-size: 1.45rem;
+    font-size: 1.35rem;
 }
 
 .float-btn:hover {
@@ -203,7 +203,6 @@ html {
 /* ---- Microphone ---- */
 #mic-btn {
     right: 100px;
-    justify-content: flex-start;
 }
 
 #mic-btn.mic-shifted {
@@ -211,13 +210,14 @@ html {
 }
 
 #mic-btn .icon-container {
-    width: 62px;
-    height: 62px;
+    width: 55px;
+    /* Ajustado para el interior del borde 2.5px */
+    height: 55px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    font-size: 1.4rem;
+    font-size: 1.35rem;
 }
 
 #mic-btn .text-label {
@@ -232,9 +232,14 @@ html {
 }
 
 /* Mic states */
-#mic-btn.is-listening {
+#mic-btn.is-listening,
+#mic-btn.is-bot-speaking {
     width: 190px;
     border-radius: 50px;
+    justify-content: flex-start;
+}
+
+#mic-btn.is-listening {
     background: linear-gradient(145deg, #49e86a, #2fb84e);
     color: white;
     border-color: rgba(255, 255, 255, 0.7);
@@ -242,8 +247,6 @@ html {
 }
 
 #mic-btn.is-bot-speaking {
-    width: 190px;
-    border-radius: 50px;
     background: linear-gradient(145deg, #a3c9ff, #6fa0e0);
     color: white;
     border-color: rgba(255, 255, 255, 0.7);
@@ -436,9 +439,9 @@ html {
 
 .input-pill {
     width: 100%;
-    border-radius: 50px;
+    border-radius: 24px;
     border: 1.5px solid rgba(255, 255, 255, 0.7);
-    padding: 11px 20px;
+    padding: 12px 20px;
     outline: none;
     resize: none;
     background: rgba(255, 255, 255, 0.75);
@@ -447,6 +450,12 @@ html {
     font-size: 0.9rem;
     color: var(--text-main);
     transition: border-color 0.25s, box-shadow 0.25s;
+    overflow-y: hidden;
+    /* Quitar slider */
+    min-height: 45px;
+    max-height: 150px;
+    line-height: 1.4;
+    display: block;
 }
 
 .input-pill::placeholder {
@@ -566,13 +575,13 @@ html {
 }
 
 .user-avatar-btn {
-    width: 46px;
-    height: 46px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     border: 2.5px solid rgba(255, 255, 255, 0.75);
     background: linear-gradient(135deg, var(--sky-400), var(--sky-600));
     color: #fff;
-    font-size: 1.2rem;
+    font-size: 1.25rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -583,12 +592,12 @@ html {
 }
 
 .user-avatar-btn:hover {
-    transform: scale(1.08);
+    transform: scale(1.1);
     box-shadow: 0 6px 24px rgba(60, 120, 190, 0.4);
 }
 
 .user-avatar-btn:active {
-    transform: scale(0.96);
+    transform: scale(0.94);
 }
 
 .user-profile-dropdown {
