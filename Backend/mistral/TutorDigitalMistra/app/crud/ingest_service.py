@@ -87,7 +87,7 @@ def generar_estructura_temario(texto_indice: str) -> List[Dict]:
 # 3. PROCESO PRINCIPAL
 # ============================================================================
 
-def procesar_archivo_temario(db: Session, archivo_bytes: bytes, filename: str, account_id: str, progress_callback=None):
+def procesar_archivo_temario(db: Session, archivo_bytes: bytes, filename: str, account_id: str, progress_callback=None, titulo: str = None):
     """
     Flujo completo de ingestión con soporte para Libros y Lista Enlazada.
     """
@@ -97,10 +97,14 @@ def procesar_archivo_temario(db: Session, archivo_bytes: bytes, filename: str, a
     
     # 1. Crear registro de Libro
     if progress_callback: progress_callback("Creando registro de libro...", 5)
+    
+    # Determinar título final
+    titulo_libro = titulo if titulo and titulo.strip() else filename.replace(".pdf", "")
+    
     try:
         print(" -> 1. Creando registro de LIBRO...")
         libro = Libro(
-            titulo=filename.replace(".pdf", ""),
+            titulo=titulo_libro,
             descripcion=f"Subido el {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             pdf_path=f"uploads/{account_id}/{filename}",
             activo=True

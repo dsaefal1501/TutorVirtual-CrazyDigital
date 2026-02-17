@@ -113,12 +113,21 @@ function showFile(file) {
     fileSizeEl.textContent = size + ' MB';
     dzEmpty.style.display = 'none';
     dzSelected.style.display = 'flex';
+
+    // Auto-fill title from filename (remove extension)
+    const titleInput = document.getElementById('uploadTitle');
+    if (titleInput) {
+        titleInput.value = file.name.replace(/\.pdf$/i, '');
+    }
 }
 
 function clearFile() {
     if (fileInput) fileInput.value = '';
     if (dzEmpty) dzEmpty.style.display = 'flex';
     if (dzSelected) dzSelected.style.display = 'none';
+    // Clear title
+    const titleInput = document.getElementById('uploadTitle');
+    if (titleInput) titleInput.value = '';
 }
 
 if (clearFileBtn) clearFileBtn.onclick = (e) => { e.stopPropagation(); clearFile(); };
@@ -133,6 +142,7 @@ if (uploadBtn) {
         }
 
         const fileToUpload = fileInput.files[0];
+        const titleVal = document.getElementById('uploadTitle').value.trim();
 
         // UI Logic: Close modal immediately, show bottom bar
         closeUploadModal();
@@ -143,6 +153,9 @@ if (uploadBtn) {
         try {
             const fd = new FormData();
             fd.append('file', fileToUpload);
+            if (titleVal) {
+                fd.append('title', titleVal);
+            }
 
             updateStatusText('Subiendo archivo al servidor...');
 
@@ -338,7 +351,6 @@ function renderSyllabusTree(data) {
         const header = document.createElement('div');
         header.className = 'book-header';
 
-        // ... (lines 340-348)
         header.innerHTML = `
             <i class="bi bi-book me-2"></i>
             <span class="flex-grow-1 text-truncate">${bookName}</span>

@@ -369,9 +369,12 @@ html {
 /* ---- Messages ---- */
 .message {
     display: flex;
-    gap: 8px;
     max-width: 88%;
     animation: msgFade 0.3s ease;
+}
+
+.avatar {
+    display: none !important;
 }
 
 @keyframes msgFade {
@@ -477,7 +480,35 @@ html {
     box-shadow: 0 5px 16px rgba(60, 130, 200, 0.40);
 }
 
+.btn-close-chat-footer {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: none;
+    background-image: linear-gradient(135deg, #ff2828 0%, #b11010 100%);
+    background-color: #cc0000;
+    /* Fallback */
+    color: white;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    box-shadow: 0 3px 10px rgba(255, 0, 0, 0.30);
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+}
+
+.btn-close-chat-footer:hover {
+    transform: scale(1.08);
+    box-shadow: 0 5px 16px rgba(255, 0, 0, 0.40);
+}
+
 .btn-send:active {
+    transform: scale(0.95);
+}
+
+.btn-close-chat-footer:active {
     transform: scale(0.95);
 }
 
@@ -656,4 +687,59 @@ html {
 
 .user-profile-action i {
     font-size: 1rem;
+}
+
+/* ============================================================
+   TRANSPARENT CHAT MODE (User Request)
+   ============================================================ */
+#chat-widget.glass-card {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+}
+
+#chat-widget .chat-body {
+    background: transparent !important;
+    box-shadow: none !important;
+    /* Remove default margin to align better */
+    margin-left: 0;
+    margin-right: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    /* Normal flow for scrolling */
+    overflow-y: auto !important;
+}
+
+/* Trick to keep messages at the bottom when sparse, but allow normal scroll when many */
+#chat-widget .chat-body::before {
+    content: "";
+    margin-top: auto;
+}
+
+/* Floating Header */
+#chat-widget .chat-header {
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(12px);
+    border-radius: 50px;
+    /* Pill shape header */
+    margin-bottom: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    padding: 8px 16px;
+}
+
+/* Scrollbar adjustment for transparent view */
+#chat-widget .chat-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+#chat-widget .chat-body::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 10px;
+}
+
+#chat-widget .chat-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
 }

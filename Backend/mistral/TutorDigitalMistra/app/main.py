@@ -89,14 +89,14 @@ def test():
     return {"mensaje": "Test exitoso"}
 
 
-def _procesar_archivo_en_thread(content: bytes, filename: str, account_id: str):
+def _procesar_archivo_en_thread(content: bytes, filename: str, account_id: str, title: str = None):
     """
     Wrapper para procesar archivo en un thread separado.
     Recibe los bytes del archivo ya leídos para evitar problemas de I/O en threads.
     """
     # Derive title for frontend matching
     # Must match ingest_service logic: filename.replace(".pdf", "")
-    base_title = filename.replace(".pdf", "")
+    base_title = title if title else filename.replace(".pdf", "")
 
     def progress_callback(msg, pct):
         print(f"[PROGRESS {account_id}] {pct}% - {msg}")
@@ -114,7 +114,7 @@ def _procesar_archivo_en_thread(content: bytes, filename: str, account_id: str):
         progress_callback("Iniciando...", 0)
         
         # Pasamos bytes y nombre de archivo al servicio
-        result = ingest_service.procesar_archivo_temario(db, content, filename, account_id, progress_callback=progress_callback)
+        result = ingest_service.procesar_archivo_temario(db, content, filename, account_id, progress_callback=progress_callback, titulo=title)
         
         # Final success state
         upload_progress[account_id] = {
@@ -145,6 +145,7 @@ async def upload_syllabus(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...), 
     account_id: str = Query(..., description="ID de la cuenta enviado en la URL"),
+    title: str = Form(None)
 ):
     """
     Sube el libro entero PDF. 
@@ -159,7 +160,7 @@ async def upload_syllabus(
         filename = file.filename
         
         # Encolar tarea en segundo plano
-        background_tasks.add_task(_procesar_archivo_en_thread, content, filename, account_id)
+        background_tasks.add_task(_procesar_archivo_en_thread, content, filename, account_id, title)
         
         return {
             "status": "processing", 

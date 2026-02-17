@@ -17,8 +17,10 @@ function loadUnity() {
         createUnityInstance(canvas, config).then((unityInstance) => {
             window.unityInstance = unityInstance;
             document.getElementById('loading-overlay').style.display = 'none';
-            document.getElementById('statusDot').classList.add('online');
-            document.getElementById('connectionStatus').innerText = "En línea";
+            const dot = document.getElementById('statusDot');
+            if (dot) dot.classList.add('online');
+            const status = document.getElementById('connectionStatus');
+            if (status) status.innerText = "En línea";
         }).catch((message) => { alert(message); });
     };
     script.onerror = () => { document.getElementById('loading-overlay').style.display = 'none'; }
@@ -587,11 +589,14 @@ function clearBotSubtitles() {
 }
 
 function addMessage(text, role) {
+    // Limpiar etiquetas de emoción [Tag] para la visualización
+    const cleanText = (role === 'bot') ? text.replace(/\[.*?\]\s*/g, '') : text;
+
     const div = document.createElement('div');
     div.className = `message ${role}`;
-    div.innerHTML = `<div class="avatar">${role === 'bot' ? '🤖' : '👤'}</div><div class="message-content"></div>`;
+    div.innerHTML = `<div class="message-content"></div>`;
     const content = div.querySelector('.message-content');
-    content.innerHTML = typeof marked !== 'undefined' ? marked.parse(text) : text;
+    content.innerHTML = typeof marked !== 'undefined' ? marked.parse(cleanText) : cleanText;
     chatContainer.appendChild(div);
     scrollToBottom();
 }
@@ -601,7 +606,7 @@ function showTyping() {
     const div = document.createElement('div');
     div.className = 'message bot';
     div.id = id;
-    div.innerHTML = `<div class="avatar">🤖</div><div class="message-content">...</div>`;
+    div.innerHTML = `<div class="message-content">...</div>`;
     chatContainer.appendChild(div);
     scrollToBottom();
     return id;
@@ -611,7 +616,9 @@ function updateBotMessage(id, cleanText) {
     const el = document.getElementById(id);
     if (!el) return;
     const content = el.querySelector('.message-content');
-    content.innerText = cleanText;
+    // Limpiar etiquetas de emoción durante el streaming
+    const textToDisplay = cleanText.replace(/\[.*?\]\s*/g, '');
+    content.innerText = textToDisplay;
     scrollToBottom();
 }
 
