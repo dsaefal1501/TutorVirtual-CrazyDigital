@@ -264,13 +264,12 @@ async def text_to_speech(
     voz: str = Form("alvaro", description="Voz: alvaro, elvira, jorge, dalia"),
     instrucciones: str = Form(None, description="No usado (compatibilidad)"),
     speed: float = Form(1.0, description="Velocidad de reproducción (0.25 a 3.0)"),
+    pitch: str = Form("+0Hz", description="Tono (ej: +5Hz, -2Hz)"),
 ):
     """
     Convierte texto a audio usando edge-tts (Microsoft Neural Voices).
     Gratis, rápido y con voz consistente. Endpoint async para máxima velocidad.
     """
-    print(f"[TTS] Recibido: texto='{texto[:50]}...', voz={voz}, speed={speed}")
-    
     if not texto or not texto.strip():
         raise HTTPException(status_code=400, detail="El texto no puede estar vacío")
     
@@ -279,6 +278,7 @@ async def text_to_speech(
             texto=texto,
             voz=voz,
             speed=speed,
+            pitch=pitch,
         )
         return Response(
             content=audio_bytes,

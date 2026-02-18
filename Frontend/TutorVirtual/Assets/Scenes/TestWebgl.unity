@@ -198,6 +198,68 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &140925961
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 140925962}
+  m_Layer: 0
+  m_Name: LookPos
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &140925962
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 140925961}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -2.95733, y: -1.685, z: -1.81905}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1260312061}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &148199179
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 148199180}
+  m_Layer: 0
+  m_Name: LookPosEyes
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &148199180
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 148199179}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -2.95733, y: -1.085, z: -1.81905}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1260312061}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &229820464
 GameObject:
   m_ObjectHideFlags: 0
@@ -643,6 +705,8 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1418127454}
+  - {fileID: 140925962}
+  - {fileID: 148199180}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1260312062
@@ -1130,14 +1194,28 @@ MonoBehaviour:
   esperaMaxima: 3
   nombreAnimacionBlink: Blink
   paramHablar: Talk
+  animVocalA: A
+  animVocalE: E
+  animVocalO: O
+  animSilencio: NoneMouth
+  mouthLayerIndex: 2
+  velocidadLabios: 0.2
   usarHumanizacion: 1
   spineBone: {fileID: 60887288294409446}
+  neckBone: {fileID: 1420328067890353960}
   headBone: {fileID: 8385327894010755527}
-  objetivoMirada: {fileID: 1418127454}
-  pesoMirada: 0.7
-  pesoCuerpo: 0.2
+  leftEyeBone: {fileID: 3873747568549291404}
+  rightEyeBone: {fileID: 5778089099809689900}
+  objetivoMirada: {fileID: 140925962}
+  ojetivoOjos: {fileID: 148199180}
+  pesoMiradaHead: 0
+  pesoMiradaNeck: 0
+  pesoMiradaEyes: 1
   velocidadSway: 0.6
-  amplitudSway: 0.5
+  amplitudSway: 6
+  saccadeRadius: 0.5
+  saccadeIntervalMin: 1.83
+  saccadeIntervalMax: 2.51
 --- !u!114 &919132149091059005
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3145,7 +3223,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3873747568549291404}
   m_Layer: 0
-  m_Name: LeftEye
+  m_Name: LeftEyeBone
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3386,7 +3464,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5778089099809689900}
   m_Layer: 0
-  m_Name: RightEye
+  m_Name: RightEyeBone
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

@@ -50,6 +50,7 @@ async def _generar_audio_async(
     texto: str,
     voz: str = VOZ_DEFAULT,
     speed: float = 1.0,
+    pitch: str = "+0Hz"
 ) -> bytes:
     """
     Genera audio desde texto usando edge-tts (async).
@@ -61,6 +62,7 @@ async def _generar_audio_async(
         text=texto,
         voice=voz,
         rate=rate,
+        pitch=pitch
     )
     
     audio_chunks = []
@@ -71,30 +73,44 @@ async def _generar_audio_async(
     return b"".join(audio_chunks)
 
 
+def _limpiar_texto_fluidez(texto: str) -> str:
+    """
+    Elimina pausas excesivas reemplazando puntuación lenta.
+    """
+    # ... suele hacer pausa larga -> .
+    texto = texto.replace("...", ".")
+    # ; y : a veces pausan mucho -> ,
+    texto = texto.replace(";", ",").replace(":", ",")
+    # Guiones largos
+    texto = texto.replace("—", ", ")
+    return texto
+
+
 async def generar_audio_tts_async(
     texto: str,
     voz: str = "alvaro",
     speed: float = 1.0,
+    pitch: str = "+0Hz"
 ) -> bytes:
     """
-    Genera audio desde texto usando edge-tts (versión async directa).
-    Ideal para llamar desde endpoints async de FastAPI.
+    Genera audio desde texto usando edge-tts.
     
     Args:
         texto: El texto a convertir en audio
-        voz: Nombre corto de la voz (alvaro, elvira, jorge, dalia) o nombre completo
-        speed: Velocidad de reproducción (0.25 a 3.0, donde 1.0 es normal)
-    
-    Returns:
-        bytes del audio generado (formato mp3)
+        voz: Nombre corto (alvaro, elvira...)
+        speed: Velocidad (ej: 1.2 para 20% más rápido)
+        pitch: Tono (ej: "+5Hz" para más agudo/activo, "-5Hz" más grave)
     """
     if not texto or not texto.strip():
         raise ValueError("El texto no puede estar vacío")
     
-    voice_id = _resolver_voz(voz)
-    print(f"[TTS edge-tts async] texto='{texto[:60]}...', voz={voice_id}, speed={speed}")
+    # Pre-procesado para fluidez
+    texto_limpio = _limpiar_texto_fluidez(texto)
     
-    return await _generar_audio_async(texto, voice_id, speed)
+    voice_id = _resolver_voz(voz)
+    print(f"[TTS edge-tts async] texto='{texto[:40]}...', voz={voice_id}, spd={speed}, pitch={pitch}")
+    
+    return await _generar_audio_async(texto_limpio, voice_id, speed, pitch)
 
 
 def generar_audio_tts(

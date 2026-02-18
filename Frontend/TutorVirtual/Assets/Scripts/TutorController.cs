@@ -15,7 +15,7 @@ public class TutorController : MonoBehaviour
 	[Header("Configuración de Habla")]
 	public string paramHablar = "Talk"; 
 
-	// Diccionario para guardar el último estado ESTÁTICO de cada capa
+	// Diccionario para guardar el último estado ESTÁTICO de cada capas
 	private Dictionary<int, string> lastStaticState = new Dictionary<int, string>();
 
 	// Corutinas activas por capa (para poder cancelarlas si llega otra orden)
@@ -56,13 +56,58 @@ public class TutorController : MonoBehaviour
 	}
 
 	// JS llamará a esto: window.unityInstance.SendMessage('Tutor', 'SetTalkingState', 1);
+	[Header("Configuración LipSync Manual")]
+	public string animVocalA = "A";
+	public string animVocalE = "E";
+	public string animVocalO = "O";
+	public string animSilencio = "Empty";
+	public int mouthLayerIndex = 2; // CAPA DE LA BOCA (Ajustar en Inspector)
+	public float velocidadLabios = 0.1f;
+	
+	private Coroutine _talkingCoroutine;
+
 	public void SetTalkingState(int estado)
 	{
-		if (anim != null)
+		bool estaHablando = (estado == 1);
+
+		// 1. Parametro Animator standard (opcional)
+		if (anim != null) anim.SetBool(paramHablar, estaHablando);
+
+		// 2. Corrutina de Lipsync
+		if (estaHablando)
 		{
-			bool estaHablando = (estado == 1);
-			anim.SetBool(paramHablar, estaHablando);
+			if (_talkingCoroutine == null) _talkingCoroutine = StartCoroutine(LipSyncLoop());
 		}
+		else
+		{
+			if (_talkingCoroutine != null) StopCoroutine(_talkingCoroutine);
+			_talkingCoroutine = null;
+			CerrarBoca();
+		}
+	}
+
+	IEnumerator LipSyncLoop()
+	{
+		while (true)
+		{
+			float rnd = Random.value;
+			string target = animSilencio;
+
+			// Mapeo solicitado: A->A, E/I->E, O/U->O
+			if (rnd < 0.35f) target = animVocalA;
+			else if (rnd < 0.70f) target = animVocalE;
+			else if (rnd < 0.90f) target = animVocalO;
+			// 10% Silencio momentáneo
+
+			if (anim != null) anim.CrossFade(target, 0.05f, mouthLayerIndex);
+
+			yield return new WaitForSeconds(Random.Range(velocidadLabios * 0.8f, velocidadLabios * 1.5f));
+		}
+	}
+
+	void CerrarBoca()
+	{
+		if (anim != null) anim.CrossFade(animSilencio, 0.15f, mouthLayerIndex);
 	}
 
 	public void SetExpression(string tag)
@@ -192,123 +237,134 @@ public class TutorController : MonoBehaviour
 		activeCoroutines[layerIndex] = null;
 	}
 
-	// --- HUMANIZACIÓN PROCEDIMENTAL (COMPATIBLE GENERIC/HUMANOID) ---
-	[Header("Humanización (Micro-movimientos)")]
+	// --- HUMANIZACIÓN MANUAL COMPLETA (SIN HUMANOID) ---
+	[Header("Humanización Procedimental")]
 	public bool usarHumanizacion = true;
 	
-	[Header("Referencias de Huesos (Asignar manual si no es Humanoid)")]
-	public Transform spineBone; // Arrastrar Spine/Chest
-	public Transform headBone;  // Arrastrar Head/Neck
-	
+	[Header("ASIGNACIÓN OBLIGATORIA DE HUESOS")]
+	[Tooltip("Hueso del pecho o columna")]
+	public Transform spineBone; 
+	[Tooltip("Hueso del cuello")]
+	public Transform neckBone;
+	[Tooltip("Hueso de la cabeza")]
+	public Transform headBone;     
+	[Tooltip("Ojo Izquierdo (Opcional, si quieres movimiento detallado)")]
+	public Transform leftEyeBone;
+	[Tooltip("Ojo Derecho (Opcional, si quieres movimiento detallado)")]
+	public Transform rightEyeBone;
+
 	[Header("Configuración Mirada")]
 	public Transform objetivoMirada;
-	[Range(0f, 1f)] public float pesoMirada = 0.5f; 
-	[Range(0f, 1f)] public float pesoCuerpo = 0.1f;
+	public Transform ojetivoOjos; // Nuevo campo para ojos independientes
+	[Range(0f, 1f)] public float pesoMiradaHead = 0.4f; // Cuánto gira la cabeza
+	[Range(0f, 1f)] public float pesoMiradaNeck = 0.3f; // Cuánto gira el cuello
+	[Range(0f, 1f)] public float pesoMiradaEyes = 0.8f; // Cuánto giran los ojos (si están asignados)
 	
 	[Header("Configuración Balanceo")]
 	public float velocidadSway = 0.6f; 
 	public float amplitudSway = 1.0f;
 	
+	[Header("Configuración Ojos Inquietos")]
+	[Range(0.01f, 0.5f)] public float saccadeRadius = 0.15f; // Cuánto se desvían los ojos
+	[Range(0.1f, 5.0f)] public float saccadeIntervalMin = 0.5f; 
+	[Range(0.1f, 5.0f)] public float saccadeIntervalMax = 2.5f;
+
+	// Variables internas
 	private float _tiempoSeed;
 	private Vector3 _offsetMiradaActual;
 	private Vector3 _currentSmoothedOffset;
 	private float _timerSaccade;
-	private Quaternion _initialSpineRot;
-	private Quaternion _initialHeadRot;
-	private bool _initializedBones = false;
+	
+	// Rotaciones previas para cancelar acumulación
+	private Quaternion _lastSpineSway = Quaternion.identity; 
 
 	void LateUpdate()
 	{
 		if (!usarHumanizacion || anim == null) return;
-
-		// 1. INICIALIZACIÓN DE HUESOS (Solo una vez)
-		if (!_initializedBones)
-		{
-			// Intentar obtener automáticamente si es Humanoid y no se han asignado
-			if (anim.isHuman)
-			{
-				if (spineBone == null) spineBone = anim.GetBoneTransform(HumanBodyBones.Spine);
-				if (headBone == null) headBone = anim.GetBoneTransform(HumanBodyBones.Head);
-			}
-			
-			// Guardar rotaciones iniciales para trabajar en relativo
-			if (spineBone != null) _initialSpineRot = spineBone.localRotation;
-			if (headBone != null) _initialHeadRot = headBone.localRotation;
-			
-			_initializedBones = true;
-		}
-
-		// 2. LÓGICA DE MOVIMIENTO (Sway + Mirada Manual)
-		
-		// A) SWAY / RESPIRACIÓN (Afecta a Spine)
-		if (spineBone != null)
-		{
-			_tiempoSeed += Time.deltaTime * velocidadSway;
-			
-			float swayX = (Mathf.PerlinNoise(_tiempoSeed, 10f) - 0.5f) * amplitudSway; 
-			float swayY = (Mathf.PerlinNoise(10f, _tiempoSeed) - 0.5f) * (amplitudSway * 0.7f); 
-			float breathing = Mathf.Sin(Time.time * 1.5f) * 0.3f; 
-
-			// Calcular rotación offset
-			Quaternion swayRot = Quaternion.Euler(swayY + breathing, swayX, 0);
-			
-			// Aplicar suavemente sobre la rotación base (animación)
-			// Slerp entre la rotación actual de la animación y la rotación con sway
-			spineBone.localRotation = spineBone.localRotation * swayRot; 
-		}
-
-		// B) MIRADA (Afecta a Head) - Reemplazo manual de OnAnimatorIK
-		 if (objectiveLookLogic()) 
-		 {
-			// Lógica extraída para claridad
-		 }
-	}
-
-	bool objectiveLookLogic()
-	{
-		if (headBone == null) return false;
 		
 		// Si no hay target, usar cámara
 		if (objetivoMirada == null && Camera.main != null) objetivoMirada = Camera.main.transform;
-		if (objetivoMirada == null) return false;
 
-		// --- SACCADES (Movimiento ocular simulado) ---
+		// 1. SWAY (BALANCEO DE COLUMNA)
+		ApplySpineSway();
+
+		// 2. MIRADA (HEAD/NECK TRACKING & EYES)
+		if (objetivoMirada != null)
+		{
+			UpdateSaccades();
+			
+			// Target General (Cabeza/Cuello)
+			Vector3 targetPoint = objetivoMirada.position + _currentSmoothedOffset;
+			
+			// Target Ojos (Específico o General)
+			Vector3 targetPointEyes = (ojetivoOjos != null ? ojetivoOjos.position : targetPoint) + _currentSmoothedOffset;
+			// Nota: Si ojetivoOjos != null, sumamos offset de nuevo? 
+			// Si targetPoint ya tiene offset, duplicarlo puede ser mucho.
+			// Corrección:
+			if (ojetivoOjos != null) targetPointEyes = ojetivoOjos.position + _currentSmoothedOffset;
+			else targetPointEyes = targetPoint; // Ya incluye offset
+
+			// A) Mover Cuello (Un poco)
+			RotateBoneTowards(neckBone, targetPoint, pesoMiradaNeck);
+			
+			// B) Mover Cabeza (Más)
+			RotateBoneTowards(headBone, targetPoint, pesoMiradaHead);
+			
+			// C) Mover Ojos (Mucho)
+			if (leftEyeBone != null) RotateBoneTowards(leftEyeBone, targetPointEyes, pesoMiradaEyes);
+			if (rightEyeBone != null) RotateBoneTowards(rightEyeBone, targetPointEyes, pesoMiradaEyes);
+		}
+	}
+
+	void ApplySpineSway()
+	{
+		if (spineBone == null) return;
+
+		// A. Limpiar frame anterior
+		spineBone.localRotation = spineBone.localRotation * Quaternion.Inverse(_lastSpineSway);
+
+		// B. Calcular frame actual
+		_tiempoSeed += Time.deltaTime * velocidadSway;
+		float swayX = (Mathf.PerlinNoise(_tiempoSeed, 10f) - 0.5f) * amplitudSway; 
+		float swayY = (Mathf.PerlinNoise(10f, _tiempoSeed) - 0.5f) * (amplitudSway * 0.7f); 
+		float breathing = Mathf.Sin(Time.time * 1.5f) * 0.3f; 
+
+		Quaternion newSway = Quaternion.Euler(swayY + breathing, swayX, 0);
+
+		// C. Aplicar
+		spineBone.localRotation = spineBone.localRotation * newSway;
+		_lastSpineSway = newSway;
+	}
+
+	void RotateBoneTowards(Transform bone, Vector3 targetPos, float weight)
+	{
+		if (bone == null || weight <= 0.001f) return;
+
+		Vector3 direction = targetPos - bone.position;
+		if (direction != Vector3.zero)
+		{
+			Quaternion targetRot = Quaternion.LookRotation(direction, Vector3.up);
+			// Slerp con suavidad
+			bone.rotation = Quaternion.Slerp(bone.rotation, targetRot, weight * Time.deltaTime * 10f);
+		}
+	}
+
+	void UpdateSaccades()
+	{
 		_timerSaccade -= Time.deltaTime;
 		if (_timerSaccade <= 0)
 		{
-			float radioDesvio = Random.Range(0.05f, 0.3f); 
+			// Ojos inquietos (Saccades)
+			float radioDesvio = Random.Range(0.01f, saccadeRadius); 
 			_offsetMiradaActual = (Random.insideUnitSphere * radioDesvio); 
-			_offsetMiradaActual.z = 0; 
-			_timerSaccade = Random.Range(0.5f, 3.0f);
+			
+			// Mantener en el plano relativo al frente (opcional, aquí sphere random está bien)
+			// _offsetMiradaActual.z = 0; 
+			
+			// Siguiente movimiento en...
+			_timerSaccade = Random.Range(saccadeIntervalMin, saccadeIntervalMax);
 		}
-		_currentSmoothedOffset = Vector3.Lerp(_currentSmoothedOffset, _offsetMiradaActual, Time.deltaTime * 3f);
-
-		// --- CÁLCULO DE ROTACIÓN ---
-		Vector3 targetPos = objetivoMirada.position + _currentSmoothedOffset;
-		Vector3 direction = targetPos - headBone.position;
-		
-		// Rotación objetivo hacia el target
-		Quaternion targetRotation = Quaternion.LookRotation(direction);
-		
-		// Corregir offset inicial del hueso (muchos modelos tienen el eje Z mal orientado)
-		// Asumimos que el "Frente" del modelo es Z positivo global o local relativo.
-		// Para simplificar: hacemos un blend entre la rotación de la animación y la del target.
-		
-		// Aplicamos peso (pesoMirada)
-		// headBone.rotation es la rotación que le da la animación actual
-		// Queremos mezclarla con 'targetRotation'
-		
-		// Nota: LookRotation a veces falla si el hueso no mira en Z. Probar con corrección manual:
-		// Quaternion lookRot = Quaternion.LookRotation(direction, Vector3.up) * Quaternion.Euler(offsetHeadRotation);
-		
-		// Método simple: RotateTowards limitado
-		// Obtener rotación actual que viene de la animación
-		Quaternion currentAnimRot = headBone.rotation;
-		Quaternion finalRot = Quaternion.Slerp(currentAnimRot, targetRotation, pesoMirada);
-		
-		headBone.rotation = finalRot;
-		
-		return true;
+		_currentSmoothedOffset = Vector3.Lerp(_currentSmoothedOffset, _offsetMiradaActual, Time.deltaTime * 8f); // Movimiento de ojos rápido
 	}
 
 	IEnumerator CicloAnimacionAleatoria()

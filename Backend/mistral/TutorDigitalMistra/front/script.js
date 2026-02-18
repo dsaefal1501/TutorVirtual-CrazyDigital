@@ -160,7 +160,8 @@ let isProcessing = false;
 let currentAudio = null;       // HTMLAudioElement activo
 let currentAudioUrl = null;    // URL.createObjectURL activo (para liberar memoria)
 let ttsEnabled = true;         // Toggle global de TTS
-let ttsSpeed = 1;            // Velocidad de TTS (0.25 - 3.0, edge-tts)
+let ttsSpeed = 1.2;            // Velocidad aumentada (antes 1.0)
+let ttsPitch = "+0Hz";         // Tono base (se puede ajustar ej: +5Hz)
 
 // --- TTS Chunked Pipeline v2 ---
 let ttsChunkQueue = [];         // Cola de chunks: { text, audioPromise, audioBlob, subtitleWords }
@@ -169,7 +170,6 @@ let ttsSentenceBuffer = "";     // Buffer para construir oraciones desde el stre
 let ttsAborted = false;         // Flag para abortar el pipeline
 let ttsOnEndCallback = null;    // Callback final cuando todo termina
 let ttsChunkIndex = 0;          // Índice para tracking
-
 // --- CONFIGURACIÓN DE SUBTÍTULOS Y EMOCIONES ---
 let botWordQueue = []; // Para modo sin TTS: guardará objetos {type: 'tag'|'word', value: '...'}
 let isShowingSubtitle = false;
@@ -816,7 +816,7 @@ function splitIntoSentences(text) {
 
 // ── Configuración del pipeline chunked v2 ──
 const TTS_FIRST_CHUNK_SENTENCES = 1;    // Primer chunk: solo 1 oración (latencia mínima)
-const TTS_NORMAL_CHUNK_SENTENCES = 1;   // Chunks siguientes: 1 oración (para mantener fluidez)
+const TTS_NORMAL_CHUNK_SENTENCES = 3;   // Chunks siguientes: 3 oraciones (MEJOR FLUIDEZ)
 const TTS_FIRST_CHUNK_MIN_WORDS = 1;    // Mínimo de palabras: 1 (ej: "Sí." se dice ya)
 const TTS_MAX_PREFETCH = 2;             // Reducimos prefetch para no saturar red
 let ttsAbortController = null;          // Para cancelar fetches en vuelo
@@ -947,6 +947,7 @@ async function fetchTTSAudio(text) {
     formData.append('texto', text);
     formData.append('voz', 'alvaro');
     formData.append('speed', ttsSpeed.toString());
+    formData.append('pitch', ttsPitch); // Enviar pitch
 
     try {
         const response = await fetch(`${API_URL}/tts`, {
