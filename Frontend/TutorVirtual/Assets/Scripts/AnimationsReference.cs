@@ -38,7 +38,7 @@ public class AnimationsReference : MonoBehaviour
 	public static class RHand
 	{
 		public const string RHandAletear = "RHandAletear";
-		public const string RHandJarra = "rHandJarra";
+		public const string RHandJarra = "RHandJarra";
 		public const string RHandPointing = "RHandPointing";
 		public const string RHandCrossed = "RHandCrossed";
 		public const string RHandRascarBarbilla = "RHandRascarBarbilla";

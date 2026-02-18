@@ -746,7 +746,7 @@ Camera:
   far clip plane: 1000
   field of view: 46
   orthographic: 1
-  orthographic size: 0.42
+  orthographic size: 0.55
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -931,7 +931,7 @@ Transform:
   m_GameObject: {fileID: 919132149091059002}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: 1, z: -0, w: 0.0000014752147}
-  m_LocalPosition: {x: 0.00084670295, y: 0, z: 0.038429648}
+  m_LocalPosition: {x: 0.00084670295, y: 0.068, z: 0.038429648}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1098,12 +1098,6 @@ MonoBehaviour:
   esperaMinima: 0.5
   esperaMaxima: 3
   nombreAnimacionBlink: Blink
-  HappyExpressionAnimation: HappyExpression
-  NeutralExpressionAnimation: NeutralExpression
-  ThinkingExpressionAnimation: ThinkingExpression
-  ExplainingExpressionAnimation: Talking
-  SurprisedExpressionAnimation: Surprised
-  EncouragingExpressionAnimation: Encouraging
   paramHablar: Talk
 --- !u!114 &919132149091059005
 MonoBehaviour:
