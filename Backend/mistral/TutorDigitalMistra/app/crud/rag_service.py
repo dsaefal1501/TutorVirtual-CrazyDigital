@@ -54,31 +54,38 @@ No asumas continuidad de clase si el usuario no la menciona.
 FORMATO DE SALIDA ESTRICTO (CRITICO)
 Tu respuesta es un GUION DE ACTUACION para un motor 3D.
 
-INICIO OBLIGATORIO: El PRIMER CARACTER de tu respuesta DEBE ser siempre una etiqueta de emoción.
+INICIO OBLIGATORIO: El PRIMER CARACTER de tu respuesta DEBE ser siempre una etiqueta de animación (Cejas o Manos).
 
-DINAMISMO INTERNO: Debes insertar nuevas etiquetas dentro del texto cada vez que cambie el tono, la intención o la frase, para que el avatar cambie de gesto mientras habla.
+DINAMISMO INTERNO: Debes insertar nuevas etiquetas de animación dentro del texto cada vez que cambie el tono, la intención, el gesto o la postura, para que el avatar cambie de animación mientras habla.
 
 ESTRUCTURA CORRECTA:
-[Happy] ¡Hola! Me alegra verte. [Thinking] Estaba revisando lo último que vimos... [Explaining] Recuerda que la sintaxis es clave.
+[UpBrows][LHandAletear] ¡Hola! Me alegra verte. [RBrowUp][RHandRascarBarbilla] Estaba revisando lo último que vimos... [NoneBrows][LHandPointing] Recuerda que la sintaxis es clave.
 
 ESTRUCTURA PROHIBIDA (Estatica):
-[Happy] Hola, me alegra verte. Estaba revisando lo ultimo. Recuerda que la sintaxis es clave.
+[UpBrows] Hola, me alegra verte. Estaba revisando lo ultimo. Recuerda que la sintaxis es clave.
 
-LISTA DE EMOCIONES DISPONIBLES
+LISTA DE ANIMACIONES DISPONIBLES
+Inserta estas etiquetas para controlar el lenguaje corporal del avatar.
+NUNCA utilices etiquetas para la boca (Mouth), este sistema se controla por otra vía.
 
-[Happy]: Saludos, introducciones o ambiente relajado.
+CEJAS (Brows):
+[NoneBrows]: Estado neutral.
+[UpBrows]: Levantar ambas cejas (sorpresa, énfasis).
+[RBrowUp]: Levantar ceja derecha (intriga, análisis).
+[LBrowUp]: Levantar ceja izquierda.
 
-[SuperHappy]: Celebración de logros o gran entusiasmo.
+MANO IZQUIERDA (LHand):
+[LHandAletear]: Movimiento dinámico al hablar o explicar (mano abierta boca arriba aleteando de arriba hacia abajo).
+[LHandJarra]: Postura estática, mano en la cintura.
+[LHandPointing]: Movimiento dinámico, señalando un concepto.
+[LHandCrossed]: Postura estática, brazo cruzado.
 
-[Thinking]: Planteando preguntas, analizando dudas, pausas reflexivas.
-
-[Explaining]: Momento de dar lección, citar o narrar conceptos.
-
-[Neutral]: Transiciones simples.
-
-[Surprised]: Ante respuestas brillantes o giros inesperados.
-
-[Encouraging]: Para corregir con delicadeza o motivar.
+MANO DERECHA (RHand):
+[RHandAletear]: Movimiento dinámico al hablar o explicar (mano abierta boca arriba aleteando de arriba hacia abajo).
+[rHandJarra]: Postura estática, mano en la cintura.
+[RHandPointing]: Movimiento dinámico, señalando.
+[RHandCrossed]: Postura estática, brazo cruzado.
+[RHandRascarBarbilla]: Movimiento dinámico reflexivo (pensando, dudando).
 
 PROTOCOLO DE AUDIO Y NARRACION (SIN PIZARRA)
 El alumno solo te ESCUCHA. No puede ver texto, ni código, ni fórmulas.
@@ -90,14 +97,12 @@ CERO SIMBOLOS TECNICOS: No uses "{", "}", "_", "#", "$", etc.
 CODIGO HABLADO: Nunca escribas código. Nárralo.
 
 MAL: "Escribe print Hola"
-
-BIEN: [Explaining] Escribe la función print, abre paréntesis y pon Hola entre comillas.
+BIEN: [LHandAletear] Escribe la función print, abre paréntesis y pon Hola entre comillas.
 
 MATEMATICAS HABLADAS:
 
 MAL: "2 + 2 = 4"
-
-BIEN: [Explaining] Dos más dos es igual a cuatro.
+BIEN: [RHandPointing] Dos más dos es igual a cuatro.
 
 REGLAS DE COMUNICACION
 
@@ -105,8 +110,6 @@ BREVEDAD: Intenta ser conciso (3-4 frases) en diálogos normales.
 EXCEPCIÓN: Si debes explicar un tema complejo, listar el temario o dar código, EXTIÉNDETE lo necesario. Usa listas y pasos claros.
 
 METODO SOCRATICO: Guía con preguntas, no des la solución final de golpe (salvo que sea una explicación teórica pura).
-
-CONEXION: Solo usar conexión con lo anterior si el alumno menciona explícitamente que continúan un tema previo.
 
 CONEXION: Solo usar conexión con lo anterior si el alumno menciona explícitamente que continúan un tema previo.
 
@@ -120,7 +123,6 @@ Si la pregunta del alumno no se puede responder con el contexto proporcionado:
 PROHIBICIONES
 
 NUNCA escribas texto antes de la primera etiqueta.
-
 NUNCA pidas perdón como IA. Si te equivocas, sigue actuando.
 """.strip()
 
@@ -406,7 +408,7 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
     if intencion == "UBICACION":
         temario_id = sesion.temario_id if sesion.temario_id else 1
         ubicacion = _obtener_info_ubicacion(db, temario_id)
-        respuesta_texto = f"[Neutral] {ubicacion}"
+        respuesta_texto = f"[NoneBrows] {ubicacion}"
         fuentes = ["Navegación jerárquica"]
     
     # --- RAMA B: MODO TUTOR SECUENCIAL (Enseñar palabra a palabra) ---
@@ -432,11 +434,13 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
                 f"---\n{contenido_libro}\n---\n\n"
                 f"INSTRUCCIÓN: Presenta este contenido del libro al alumno de forma natural y pedagógica. "
                 f"Usa el texto LITERAL del libro, puedes añadir explicaciones tuyas DESPUÉS. "
-                f"Si es código, muéstralo completo. Al final, pregunta si el alumno entendió o quiere un ejemplo."
+                f"Si es código, muéstralo completo. Al final, pregunta si el alumno entendió o quiere un ejemplo.\n\n"
+                f"RECUERDA EL FORMATO: Comienza con una etiqueta de animación y usa etiquetas internas."
             )
             
-            msgs = [{"role": "system", "content": PABLO_SYSTEM_PROMPT}]
-            msgs.append({"role": "system", "content": alias_context})
+            # UNIFICAR SYSTEM MESSAGES (Para mejor seguimiento en modelos pequeños)
+            system_msg = f"{PABLO_SYSTEM_PROMPT}\n\n{alias_context}"
+            msgs = [{"role": "system", "content": system_msg}]
             msgs.extend(historial)
             msgs.append({"role": "user", "content": prompt_contenido})
             
@@ -445,11 +449,11 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
                 resp = client.chat.complete(model=DEFAULT_MODEL, messages=msgs)
                 respuesta_texto = resp.choices[0].message.content
             else:
-                # Fallback sin API: mostrar contenido directo
+                # Fallback sin API: mostrar contenido directo (usando nuevas etiquetas)
                 if tipo == 'codigo':
-                    respuesta_texto = f"[Explaining] Aquí tienes el ejemplo práctico:\n\n```python\n{contenido_libro}\n```\n\n¿Lo analizamos juntos?"
+                    respuesta_texto = f"[NoneBrows][LHandAletear] Aquí tienes el ejemplo práctico:\n\n```python\n{contenido_libro}\n```\n\n¿Lo analizamos juntos?"
                 else:
-                    respuesta_texto = f"[Explaining] {contenido_libro}\n\n¿Te hace sentido? ¿Seguimos?"
+                    respuesta_texto = f"[NoneBrows][LHandAletear] {contenido_libro}\n\n¿Te hace sentido? ¿Seguimos?"
             
             fuentes = [f"Ref: {bloque.ref_fuente} (Pag {bloque.pagina})"]
         else:
@@ -515,9 +519,9 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
         # Cargar historial
         historial = _cargar_historial(db, sesion.id, limite=10)
         
-        # Construir Prompt Final con "Mega Contexto"
-        msgs = [{"role": "system", "content": PABLO_SYSTEM_PROMPT}]
-        msgs.append({"role": "system", "content": alias_context})
+        # UNIFICAR SYSTEM MESSAGES
+        system_msg = f"{PABLO_SYSTEM_PROMPT}\n\n{alias_context}"
+        msgs = [{"role": "system", "content": system_msg}]
         msgs.extend(historial)
         
         user_msg = ""
@@ -533,7 +537,8 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
             user_msg = (
                 f"CONTEXTO DEL LIBRO (usa este contenido LITERAL para responder):\n"
                 f"{contexto_detallado}\n\n"
-                f"PREGUNTA DEL ALUMNO: {pregunta.texto}"
+                f"PREGUNTA DEL ALUMNO: {pregunta.texto}\n\n"
+                f"RECUERDA: Tu respuesta DEBE empezar con una etiqueta y ser dinámica."
             )
         msgs.append({"role": "user", "content": user_msg})
         
@@ -545,9 +550,9 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
                 respuesta_texto = resp.choices[0].message.content
             except Exception as e:
                 print(f"Error Mistral: {e}")
-                respuesta_texto = "[Encouraging] Lo siento, tuve un pequeño lapsus técnico. ¿Podrías repetirme la pregunta?"
+                respuesta_texto = "[UpBrows] Lo siento, tuve un pequeño lapsus técnico. ¿Podrías repetirme la pregunta?"
         else:
-            respuesta_texto = "[Neutral] Modo simulación (Sin API Key)."
+            respuesta_texto = "[NoneBrows] Modo simulación (Sin API Key)."
 
     # Guardar historial y citas
     msg_user = MensajeChat(sesion_id=sesion.id, rol="user", texto=pregunta.texto)
@@ -622,9 +627,9 @@ def preguntar_al_tutor_stream(db: Session, pregunta: PreguntaUsuario):
     # Cargar historial
     historial = _cargar_historial(db, sesion.id, limite=10)
     
-    # Construir mensajes con Pablo completo
-    msgs = [{"role": "system", "content": PABLO_SYSTEM_PROMPT}]
-    msgs.append({"role": "system", "content": alias_context})
+    # UNIFICAR SYSTEM MESSAGES
+    system_msg = f"{PABLO_SYSTEM_PROMPT}\n\n{alias_context}"
+    msgs = [{"role": "system", "content": system_msg}]
     msgs.extend(historial)
     
     if not docs:
@@ -634,7 +639,7 @@ def preguntar_al_tutor_stream(db: Session, pregunta: PreguntaUsuario):
             f"INSTRUCCIÓN: Responde amablemente que no tienes información sobre ese tema en el material actual. NO inventes contenido."
         )
     else:
-        user_msg_stream = f"CONTEXTO DEL LIBRO (usa este contenido LITERAL para responder):\n{contexto_str}\n\nPREGUNTA DEL ALUMNO: {pregunta.texto}"
+        user_msg_stream = f"CONTEXTO DEL LIBRO (usa este contenido LITERAL para responder):\n{contexto_str}\n\nPREGUNTA DEL ALUMNO: {pregunta.texto}\n\nRECUERDA EL FORMATO: Comienza con una etiqueta de animación y usa etiquetas internas."
 
     msgs.append({
         "role": "user", 
@@ -670,7 +675,7 @@ def preguntar_al_tutor_stream(db: Session, pregunta: PreguntaUsuario):
         db.add(MensajeChat(sesion_id=sesion.id, rol="assistant", texto=full_text))
         db.commit()
     else:
-        yield "[Neutral] Modo simulación (Sin API Key configurada)."
+        yield "[NoneBrows] Modo simulación (Sin API Key configurada)."
 
 # ============================================================================
 # 7. SINCRONIZACIÓN TEMARIO → BASE CONOCIMIENTO (Utilidad)

@@ -673,7 +673,8 @@ function clearBotSubtitles() {
 
 function addMessage(text, role) {
     // Limpiar etiquetas de emoción [Tag] para la visualización
-    const cleanText = (role === 'bot') ? text.replace(/\[.*?\]\s*/g, '') : text;
+    //const cleanText = (role === 'bot') ? text.replace(/\[.*?\]\s*/g, '') : text;
+    const cleanText = text;
 
     const div = document.createElement('div');
     div.className = `message ${role}`;
@@ -700,7 +701,8 @@ function updateBotMessage(id, cleanText) {
     if (!el) return;
     const content = el.querySelector('.message-content');
     // Limpiar etiquetas de emoción durante el streaming
-    const textToDisplay = cleanText.replace(/\[.*?\]\s*/g, '');
+    const textToDisplay = cleanText; // quiero desactivar el ocultado de etiquetas
+
     content.innerHTML = typeof marked !== 'undefined' ? marked.parse(textToDisplay) : textToDisplay;
     scrollToBottom();
 }
@@ -814,22 +816,23 @@ function splitIntoSentences(text) {
 
 // ── Configuración del pipeline chunked v2 ──
 const TTS_FIRST_CHUNK_SENTENCES = 1;    // Primer chunk: solo 1 oración (latencia mínima)
-const TTS_NORMAL_CHUNK_SENTENCES = 2;   // Chunks siguientes: 2 oraciones (menos cortes)
-const TTS_FIRST_CHUNK_MIN_WORDS = 4;    // Mínimo de palabras para disparar primer chunk
-const TTS_MAX_PREFETCH = 3;             // Cuántos chunks pre-generar en paralelo
+const TTS_NORMAL_CHUNK_SENTENCES = 1;   // Chunks siguientes: 1 oración (para mantener fluidez)
+const TTS_FIRST_CHUNK_MIN_WORDS = 1;    // Mínimo de palabras: 1 (ej: "Sí." se dice ya)
+const TTS_MAX_PREFETCH = 2;             // Reducimos prefetch para no saturar red
 let ttsAbortController = null;          // Para cancelar fetches en vuelo
 
 /**
  * Alimenta el buffer de texto conforme llega del streaming.
- * ESTRATEGIA v2: El primer chunk se envía con solo 1 oración completa
- * para que el usuario oiga audio lo antes posible. Los chunks siguientes
- * son más grandes (2 oraciones) para reducir micro-cortes.
+ * ESTRATEGIA OPTIMIZADA: Para el primer chunk, cortamos incluso en comas
+ * o pausas breves para que el audio arranque INMEDIATAMENTE.
  */
 function feedTTSSentenceBuffer(chunk) {
     ttsSentenceBuffer += chunk;
 
-    // Buscar oraciones completas en el buffer (terminan en . ! ? seguido de espacio o fin)
-    const sentenceEnders = /[.!?](?:\s|$)/g;
+    // Detectar terminadores: . ! ? y también , : ; para el primer chunk
+    const isFirstChunk = (ttsChunkIndex === 0);
+    const sentenceEnders = isFirstChunk ? /[.!?](?:\s|$)|[,:;]\s/g : /[.!?](?:\s|$)/g;
+
     let lastSentenceEnd = 0;
     let sentenceCount = 0;
     let match;
@@ -842,14 +845,14 @@ function feedTTSSentenceBuffer(chunk) {
     if (lastSentenceEnd === 0 || sentenceCount === 0) return;
 
     // Decidir cuántas oraciones necesitamos para disparar un chunk
-    const isFirstChunk = (ttsChunkIndex === 0);
-    const requiredSentences = isFirstChunk ? TTS_FIRST_CHUNK_SENTENCES : TTS_NORMAL_CHUNK_SENTENCES;
+    // Si es el primero, con 1 fragmento (aunque sea una coma) nos vale.
+    const requiredSentences = isFirstChunk ? 1 : TTS_NORMAL_CHUNK_SENTENCES;
 
     if (sentenceCount >= requiredSentences) {
         const readyPart = ttsSentenceBuffer.substring(0, lastSentenceEnd);
         const wordCount = readyPart.trim().split(/\s+/).length;
 
-        // Para el primer chunk, verificar mínimo de palabras
+        // Para el primer chunk, verificar mínimo de palabras (ahora es 1)
         if (isFirstChunk && wordCount < TTS_FIRST_CHUNK_MIN_WORDS) return;
 
         const rawText = readyPart.trim();
@@ -858,7 +861,7 @@ function feedTTSSentenceBuffer(chunk) {
         // Extraer emociones y limpiar
         const emotionTags = extractEmotionSchedule(rawText);
         const cleaned = cleanTextForTTS(rawText);
-        if (cleaned.length > 2) {
+        if (cleaned.length > 1) { // Min len reduced
             console.log(`[TTS v2] Chunk ${ttsChunkIndex} listo (${sentenceCount} orac, ${wordCount} pal, 1er=${isFirstChunk})`);
             enqueueTTSChunk(cleaned, emotionTags);
         }

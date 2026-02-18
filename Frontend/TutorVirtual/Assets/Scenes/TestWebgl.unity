@@ -1053,6 +1053,7 @@ GameObject:
   - component: {fileID: 543450653629259648}
   - component: {fileID: 919132149091059003}
   - component: {fileID: 919132149091059004}
+  - component: {fileID: 919132149091059005}
   m_Layer: 0
   m_Name: Tutor
   m_TagString: Untagged
@@ -1104,6 +1105,18 @@ MonoBehaviour:
   SurprisedExpressionAnimation: Surprised
   EncouragingExpressionAnimation: Encouraging
   paramHablar: Talk
+--- !u!114 &919132149091059005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 919132149091059002}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b6e46434b699cc4a87096400ed454c2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: '::'
 --- !u!137 &1001626796363340759
 SkinnedMeshRenderer:
   m_ObjectHideFlags: 0
@@ -2407,6 +2420,10 @@ SkinnedMeshRenderer:
   - 0
   - 0
   - 0
+  - 0
+  - 0
+  - 0
+  - 1.8
   - 0
   m_RootBone: {fileID: 3742407835821305037}
   m_AABB:

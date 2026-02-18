@@ -174,16 +174,137 @@ html {
 .sidebar-logo {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 15px;
     margin-bottom: 40px;
+}
+
+.sidebar-logo-svg {
+    width: 36px;
+    height: 36px;
+    color: var(--primary-500);
+    transition: all var(--transit-normal);
+    overflow: visible;
+}
+
+.sidebar-logo-svg path,
+.sidebar-logo-svg ellipse {
+    stroke: currentColor !important;
+    stroke-width: 40 !important;
+    fill: none !important;
+    transition: all 0.3s ease;
+}
+
+.sidebar-logo-svg ellipse {
+    fill: currentColor !important;
+}
+
+.sidebar-logo:hover .sidebar-logo-svg {
+    transform: rotateX(15deg) scale(1.2);
+    color: var(--primary-500);
+}
+
+.sidebar-logo-text {
     color: var(--primary-700);
     font-size: 1.25rem;
     font-weight: 800;
+    letter-spacing: -0.5px;
 }
 
-.logo-emoji {
-    font-size: 1.8rem;
-    animation: bounce 3s infinite;
+/* ---- Premium SVG Logo Styling ---- */
+.logo-wrapper {
+    width: fit-content;
+    margin: 0 auto;
+    padding: 12px 25px;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.05);
+    perspective: 1000px;
+    transition: all var(--transit-normal);
+}
+
+.main-logo-svg {
+    width: 200px;
+    color: var(--primary-500);
+    height: auto;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    animation: floatLogo 6s infinite ease-in-out;
+    shape-rendering: geometricPrecision;
+}
+
+.logo-path-a {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 49.3;
+    stroke-dasharray: 4000;
+    stroke-dashoffset: 4000;
+    animation: drawPath 1.5s ease-out forwards;
+}
+
+.logo-path-b {
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 49.3;
+    stroke-dasharray: 4000;
+    stroke-dashoffset: 4000;
+    animation: drawPath 2s ease-out forwards 0.2s;
+}
+
+.logo-path-c {
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 26.6;
+    opacity: 0;
+    transform-origin: center;
+    transform-box: fill-box;
+    animation: fadeInScale 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards 0.6s;
+}
+
+@keyframes drawPath {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes floatLogo {
+
+    0%,
+    100% {
+        transform: translateY(0) rotateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px) rotateY(8deg);
+    }
+}
+
+.logo-wrapper:hover {
+    background: rgba(255, 255, 255, 0.6);
+    transform: translateY(-2px);
+}
+
+.logo-wrapper:hover .main-logo-svg {
+    transform: scale(1.05) rotateY(10deg);
+    color: var(--primary-500);
+    /* COLOR AL PASAR EL RATÓN */
 }
 
 .sidebar-menu {
