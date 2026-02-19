@@ -807,6 +807,7 @@
                     sessionStorage.setItem('userRole', 'Instructor');
                     sessionStorage.setItem('userId', data.instructor.id);
                     sessionStorage.setItem('userName', data.instructor.nombre);
+                    sessionStorage.setItem('licenciaId', data.instructor.licencia_id);
                     localStorage.setItem('authToken', data.access_token);
 
                     window.location.href = "instructor.html";

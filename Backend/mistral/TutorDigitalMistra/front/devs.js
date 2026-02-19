@@ -4,8 +4,17 @@ const API_URL = 'http://127.0.0.1:8000';
 // ---- MAIN INITIALIZATION ----
 document.addEventListener('DOMContentLoaded', () => {
     // Inicializar vista
+    // Inicializar vista
     switchTab('create');
     loadInstructors(); // Cargar la lista en segundo plano
+
+    // Auto-refresco en tiempo real (Polling cada 2s)
+    setInterval(() => {
+        const listPanel = document.getElementById('view-list');
+        if (listPanel && listPanel.style.display !== 'none') {
+            loadInstructors();
+        }
+    }, 2000);
 });
 
 // ---- NAVIGATION ----
@@ -116,6 +125,8 @@ async function loadInstructors() {
 
         if (instructors.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No hay instructores registrados.</td></tr>';
+            // Aún así cargamos licencias
+            loadLicenses();
             return;
         }
 
@@ -143,6 +154,68 @@ async function loadInstructors() {
     } catch (e) {
         console.error(e);
         tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--error-text)">Error: ${e.message}</td></tr>`;
+    }
+
+    // Cargar licencias también
+    loadLicenses();
+}
+
+async function loadLicenses() {
+    const tbody = document.getElementById('licensesTableBody');
+    if (!tbody) return;
+
+    try {
+        const res = await fetch(`${API_URL}/dev/licencias`);
+        if (!res.ok) throw new Error('Error licencias');
+        const data = await res.json();
+
+        tbody.innerHTML = '';
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6">No hay licencias</td></tr>';
+            return;
+        }
+
+        data.forEach(lic => {
+            const tr = document.createElement('tr');
+            const isActive = lic.activa;
+
+            tr.innerHTML = `
+                <td>#${lic.id}</td>
+                <td><span style="font-weight:600; color:#fff">${lic.cliente}</span></td>
+                <td>${lic.max_alumnos}</td>
+                <td>${lic.usuarios_actuales} / ${lic.max_alumnos}</td>
+                <td><span class="badge" style="background:${isActive ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color:${isActive ? '#34d399' : '#f87171'}; padding:4px 8px; border-radius:4px; font-size:0.75rem;">
+                    ${isActive ? 'Activa' : 'Inactiva'}
+                </span></td>
+                <td>${lic.fecha_fin || '∞'}</td>
+                <td>
+                    ${lic.id !== 1 ? `
+                    ` : '<span class="text-muted" style="font-size:12px">Sistema</span>'}
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+    } catch (e) {
+        console.error("Error cargando licencias:", e);
+    }
+}
+
+async function deleteLicense(id, clientName) {
+    if (!confirm(`⚠️ PELIGRO: Eliminar la licencia "${clientName}" (ID: ${id}) borrará TODOS sus usuarios, libros y datos asociados de forma permanente.\n\n¿Estás seguro?`)) return;
+
+    try {
+        const res = await fetch(`${API_URL}/dev/licencia/${id}`, { method: 'DELETE' });
+
+        if (res.ok) {
+            loadLicenses();
+            loadInstructors(); // Refrescar también la lista de instructores por si se borraron
+        } else {
+            const data = await res.json();
+            throw new Error(data.detail || 'Error al eliminar licencia');
+        }
+    } catch (e) {
+        alert("Error: " + e.message);
     }
 }
 

@@ -1,6 +1,8 @@
 import asyncio
 import secrets
 import string
+import logging
+from collections import deque
 from typing import List, Dict
 from datetime import datetime, timedelta
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query, Response
@@ -24,6 +26,29 @@ from app.auth import get_current_user
 
 # Crear las tablas automáticamente
 modelos.Base.metadata.create_all(bind=engine)
+
+# In-memory buffer para logs de consola (panel de desarrolladores)
+LOG_BUFFER = deque(maxlen=2000)
+
+class DequeHandler(logging.Handler):
+    def __init__(self, buffer_deque: deque):
+        super().__init__()
+        self.buffer = buffer_deque
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            self.buffer.append(f"[{ts}] {record.levelname}: {msg}")
+        except Exception:
+            pass
+
+# Añadir handler al logger root para capturar salidas y exponerlas via endpoint
+deque_handler = DequeHandler(LOG_BUFFER)
+deque_handler.setLevel(logging.DEBUG)
+deque_handler.setFormatter(logging.Formatter("%(message)s"))
+logging.getLogger().addHandler(deque_handler)
+logging.getLogger().setLevel(logging.INFO)
 
 # Global in-memory storage for upload progress (MVP)
 upload_progress = {}
@@ -674,7 +699,8 @@ def login_instructor(creds: schemas.InstructorLogin, db: Session = Depends(get_d
         id=user.id,
         nombre=user.nombre,
         email=user.email,
-        rol=user.rol
+        rol=user.rol,
+        licencia_id=user.licencia_id
     )
 
     return schemas.Token(
@@ -727,12 +753,62 @@ def create_instructor(data: schemas.InstructorCreate, db: Session = Depends(get_
         db.add(nuevo_instructor)
         db.commit()
         db.refresh(nuevo_instructor)
+        
         return {"mensaje": f"Instructor '{data.username}' creado con éxito", "id": nuevo_instructor.id}
     except Exception as e:
         db.rollback()
         print(f"Error creando instructor: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/dev/logs")
+def get_logs(limit: int = 200):
+    """
+    Dev endpoint: devuelve las últimas líneas capturadas del log en memoria.
+    """
+    # Devolver las últimas `limit` entradas
+    lines = list(LOG_BUFFER)
+    if limit and limit > 0:
+        return lines[-limit:]
+    return lines
+
+
+@app.get("/dev/logs/stream")
+def stream_logs():
+    """
+    Endpoint SSE (Server-Sent Events) que emite nuevas entradas del log.
+    """
+    async def event_generator():
+        last_index = 0
+        while True:
+            buffer_list = list(LOG_BUFFER)
+            if len(buffer_list) > last_index:
+                new = buffer_list[last_index:]
+                for ln in new:
+                    yield f"data: {ln}\n\n"
+                last_index = len(buffer_list)
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@app.get("/dev/instructors", response_model=List[schemas.InstructorResponse])
+def list_instructors(db: Session = Depends(get_db)):
+    """
+    Endpoint para DEVS: Lista todos los instructores.
+    """
+    instructors = db.query(modelos.Usuario).filter(modelos.Usuario.rol == 'instructor').all()
+    return [
+        schemas.InstructorResponse(
+            id=i.id,
+            nombre=i.nombre,
+            email=i.email,
+            rol=i.rol,
+            licencia_id=i.licencia_id
+        ) for i in instructors
+    ]
+
+
+
 @app.get("/dev/instructors", response_model=List[schemas.InstructorResponse])
 def list_instructors(db: Session = Depends(get_db)):
     """
@@ -748,77 +824,183 @@ def list_instructors(db: Session = Depends(get_db)):
         ) for i in instructors
     ]
 
-@app.delete("/dev/instructor/{user_id}")
-def delete_instructor(user_id: int, db: Session = Depends(get_db)):
+@app.get("/dev/licencias")
+def list_licencias(db: Session = Depends(get_db)):
     """
-    Endpoint para DEVS: Elimina un instructor por ID.
+    Endpoint para DEVS: Lista todas las licencias con contador de usuarios.
     """
-    user = db.query(modelos.Usuario).filter(modelos.Usuario.id == user_id, modelos.Usuario.rol == 'instructor').first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Instructor no encontrado")
-        
-    try:
-        # Borrar también su licencia creada
-        licencia_id = user.licencia_id
-        
-        # Eliminar usuario
-        db.delete(user)
-        
-        # Eliminar licencia si no es la default (1) y no tiene otros usuarios (opcional, por ahora borramos si es única)
-        if licencia_id != 1:
-             other_users = db.query(modelos.Usuario).filter(modelos.Usuario.licencia_id == licencia_id).count()
-             if other_users == 0:
-                 db.query(modelos.Licencia).filter(modelos.Licencia.id == licencia_id).delete()
-
-        db.commit()
-        return {"mensaje": "Instructor eliminado correctamente"}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/dev/instructors", response_model=List[schemas.InstructorResponse])
-def list_instructors(db: Session = Depends(get_db)):
-    """
-    Endpoint para DEVS: Lista todos los instructores.
-    """
-    instructors = db.query(modelos.Usuario).filter(modelos.Usuario.rol == 'instructor').all()
-    return [
-        schemas.InstructorResponse(
-            id=i.id,
-            nombre=i.nombre,
-            email=i.email,
-            rol=i.rol
-        ) for i in instructors
-    ]
+    licencias = db.query(modelos.Licencia).all()
+    results = []
+    for lic in licencias:
+        user_count = db.query(modelos.Usuario).filter(
+            modelos.Usuario.licencia_id == lic.id,
+            modelos.Usuario.rol == 'alumno'
+        ).count()
+        results.append({
+            "id": lic.id,
+            "cliente": lic.cliente,
+            "max_alumnos": lic.max_alumnos,
+            "usuarios_actuales": user_count,
+            "activa": lic.activa,
+            "fecha_fin": lic.fecha_fin.strftime("%Y-%m-%d") if lic.fecha_fin else None
+        })
+    return results
 
 @app.delete("/dev/instructor/{user_id}")
 def delete_instructor(user_id: int, db: Session = Depends(get_db)):
     """
     Endpoint para DEVS: Elimina un instructor por ID.
+    Realiza un BORRADO EN CASCADA COMPLETO.
     """
-    user = db.query(modelos.Usuario).filter(modelos.Usuario.id == user_id, modelos.Usuario.rol == 'instructor').first()
-    if not user:
+    instructor = db.query(modelos.Usuario).filter(modelos.Usuario.id == user_id, modelos.Usuario.rol == 'instructor').first()
+    if not instructor:
         raise HTTPException(status_code=404, detail="Instructor no encontrado")
         
     try:
-        # Borrar también su licencia creada
-        licencia_id = user.licencia_id
+        # Recuperar la licencia asociada
+        licencia_id = instructor.licencia_id
+        licencia = db.query(modelos.Licencia).filter(modelos.Licencia.id == licencia_id).first()
         
-        # Eliminar usuario
-        db.delete(user)
+        should_delete_license = False
+        if licencia and licencia.id != 1:
+             # Verificar si hay OTROS instructores usando esta misma licencia
+             other_instructors = db.query(modelos.Usuario).filter(
+                 modelos.Usuario.licencia_id == licencia.id, 
+                 modelos.Usuario.id != instructor.id,
+                 modelos.Usuario.rol == 'instructor'
+             ).count()
+             
+             # Si no hay otros instructores, asumimos que la licencia era dedicada a este usuario -> BORRAR
+             if other_instructors == 0:
+                 should_delete_license = True
         
-        # Eliminar licencia si no es la default (1) y no tiene otros usuarios (opcional, por ahora borramos si es única)
-        if licencia_id != 1:
-             other_users = db.query(modelos.Usuario).filter(modelos.Usuario.licencia_id == licencia_id).count()
-             if other_users == 0:
-                 db.query(modelos.Licencia).filter(modelos.Licencia.id == licencia_id).delete()
+        # ---------------------------------------------------------
+        # 1. BORRADO DE ALUMNOS Y SUS DATOS (Cascade Manual)
+        # ---------------------------------------------------------
+        alumnos = db.query(modelos.Usuario).filter(modelos.Usuario.licencia_id == licencia_id, modelos.Usuario.rol == 'alumno').all()
+        
+        for alumno in alumnos:
+            # Borrar datos relacionados
+            db.query(modelos.ProgresoAlumno).filter(modelos.ProgresoAlumno.usuario_id == alumno.id).delete()
+            db.query(modelos.IntentoAlumno).filter(modelos.IntentoAlumno.alumno_id == alumno.id).delete()
+            db.query(modelos.TestScore).filter(modelos.TestScore.usuario_id == alumno.id).delete()
+            db.query(modelos.LearningEvent).filter(modelos.LearningEvent.usuario_id == alumno.id).delete()
+            db.query(modelos.MetricaConsumo).filter(modelos.MetricaConsumo.usuario_id == alumno.id).delete()
+            
+            # Borrar sesiones y mensajes 
+            sesiones = db.query(modelos.SesionChat).filter(modelos.SesionChat.alumno_id == alumno.id).all()
+            for s in sesiones:
+                 db.query(modelos.MensajeChat).filter(modelos.MensajeChat.sesion_id == s.id).delete()
+            db.query(modelos.SesionChat).filter(modelos.SesionChat.alumno_id == alumno.id).delete()
+
+            # Borrar Enrollments del alumno
+            db.query(modelos.Enrollment).filter(modelos.Enrollment.usuario_id == alumno.id).delete()
+            
+            # Borrar el alumno
+            db.delete(alumno)
+        
+        # ---------------------------------------------------------
+        # 2. BORRADO DE LIBROS HUÉRFANOS (Exclusivos de esta licencia)
+        # ---------------------------------------------------------
+        # Solo borrar libros si vamos a borrar la licencia, o si ya no tienen uso
+        enrollments_licencia = db.query(modelos.Enrollment).filter(modelos.Enrollment.licencia_id == licencia_id).all()
+        libros_ids_licencia = list(set([e.libro_id for e in enrollments_licencia]))
+        
+        for lid in libros_ids_licencia:
+            # Contar usos en otras licencias
+            otros_usos = db.query(modelos.Enrollment).filter(
+                modelos.Enrollment.libro_id == lid, 
+                modelos.Enrollment.licencia_id != licencia_id
+            ).count()
+            
+            if otros_usos == 0:
+                # Si solo se usa aquí, borrar libro completo
+                rag_service.eliminar_libro_completo(db, lid)
+
+        # Borrar Enrollments restantes de la licencia (instructor, etc)
+        db.query(modelos.Enrollment).filter(modelos.Enrollment.licencia_id == licencia_id).delete()
+
+        # ---------------------------------------------------------
+        # 3. BORRAR INSTRUCTOR Y LICENCIA
+        # ---------------------------------------------------------
+        db.delete(instructor)
+        
+        if should_delete_license and licencia:
+            db.delete(licencia)
 
         db.commit()
-        return {"mensaje": "Instructor eliminado correctamente"}
+        return {"mensaje": f"Instructor y datos asociados eliminados. Licencia borrada: {should_delete_license}"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error borrando instructor: {str(e)}")
+
+@app.delete("/dev/licencia/{licencia_id}")
+def delete_licencia(licencia_id: int, db: Session = Depends(get_db)):
+    """
+    Endpoint para DEVS: Elimina una licencia directamente por su ID.
+    Realiza un BORRADO EN CASCADA COMPLETO de usuarios y libros.
+    """
+    licencia = db.query(modelos.Licencia).filter(modelos.Licencia.id == licencia_id).first()
+    if not licencia:
+        raise HTTPException(status_code=404, detail="Licencia no encontrada")
+    
+    if licencia_id == 1:
+        raise HTTPException(status_code=400, detail="No se puede eliminar la licencia de sistema (ID 1)")
+
+    try:
+        print(f"DEBUG: Iniciando borrado directo de Licencia {licencia_id}...")
+
+        # 1. BORRAR USUARIOS
+        usuarios = db.query(modelos.Usuario).filter(modelos.Usuario.licencia_id == licencia_id).all()
+        for usr in usuarios:
+            db.query(modelos.ProgresoAlumno).filter(modelos.ProgresoAlumno.usuario_id == usr.id).delete()
+            db.query(modelos.IntentoAlumno).filter(modelos.IntentoAlumno.alumno_id == usr.id).delete()
+            db.query(modelos.TestScore).filter(modelos.TestScore.usuario_id == usr.id).delete()
+            db.query(modelos.LearningEvent).filter(modelos.LearningEvent.usuario_id == usr.id).delete()
+            db.query(modelos.MetricaConsumo).filter(modelos.MetricaConsumo.usuario_id == usr.id).delete()
+            
+            sesiones = db.query(modelos.SesionChat).filter(modelos.SesionChat.alumno_id == usr.id).all()
+            for s in sesiones:
+                 db.query(modelos.MensajeChat).filter(modelos.MensajeChat.sesion_id == s.id).delete()
+            db.query(modelos.SesionChat).filter(modelos.SesionChat.alumno_id == usr.id).delete()
+
+            db.query(modelos.Enrollment).filter(modelos.Enrollment.usuario_id == usr.id).delete()
+            db.delete(usr)
+        
+        db.commit() # Commit usuarios
+
+        # 2. BORRAR ENROLLMENTS HUÉRFANOS
+        db.query(modelos.Enrollment).filter(modelos.Enrollment.licencia_id == licencia_id).delete()
+        db.commit()
+
+        # 3. BORRAR LIBROS PROPIOS
+        libros_propios = db.query(modelos.Libro).filter(modelos.Libro.licencia_id == licencia_id).all()
+        for libro in libros_propios:
+            try:
+                rag_service.eliminar_libro_completo(db, libro.id)
+            except:
+                # Fallback manual
+                try:
+                    db.rollback()
+                    db.query(modelos.Temario).filter(modelos.Temario.libro_id == libro.id).delete()
+                    db.query(modelos.Enrollment).filter(modelos.Enrollment.libro_id == libro.id).delete()
+                    l_del = db.query(modelos.Libro).filter(modelos.Libro.id == libro.id).first()
+                    if l_del: db.delete(l_del)
+                    db.commit()
+                except: pass
+
+        # 4. BORRAR LICENCIA
+        # Re-fetch por si acaso
+        lic = db.query(modelos.Licencia).filter(modelos.Licencia.id == licencia_id).first()
+        if lic:
+            db.delete(lic)
+            db.commit()
+            
+        return {"mensaje": f"Licencia {licencia_id} eliminada correctamente."}
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/auth/change-password")
 def change_password(payload: schemas.ChangePassword, db: Session = Depends(get_db)):
     user = db.query(modelos.Usuario).filter(modelos.Usuario.id == payload.user_id).first()

@@ -60,6 +60,7 @@ class Libro(Base):
     pdf_path: Mapped[Optional[str]] = mapped_column(String(500))
     fecha_creacion: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    licencia_id: Mapped[Optional[int]] = mapped_column(ForeignKey("licencias.id"), nullable=True)
 
     # Relaciones
     temarios: Mapped[List["Temario"]] = relationship(back_populates="libro")

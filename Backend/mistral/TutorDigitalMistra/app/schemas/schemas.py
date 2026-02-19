@@ -119,6 +119,7 @@ class InstructorResponse(BaseModel):
     nombre: str
     email: str
     rol: str
+    licencia_id: int
 
 class LibroResponse(BaseModel):
     id: int

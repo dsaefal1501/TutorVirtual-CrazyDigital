@@ -1,6 +1,7 @@
 /* instructor.js */
 const API_URL = 'http://127.0.0.1:8000';
 let licenseStatus = { current: 0, max: 0 };
+const LICENCIA_ID = sessionStorage.getItem('licenciaId') || 1;
 
 // ---- DOM References ----
 const uploadForm = document.getElementById('uploadForm');
@@ -721,8 +722,8 @@ async function loadAlumnos() {
 
     try {
         const [resAlumnos, resLicencia] = await Promise.all([
-            fetch(`${API_URL}/licencias/1/alumnos`),
-            fetch(`${API_URL}/licencias/1`)
+            fetch(`${API_URL}/licencias/${LICENCIA_ID}/alumnos`),
+            fetch(`${API_URL}/licencias/${LICENCIA_ID}`)
         ]);
 
         const list = await resAlumnos.json();
@@ -900,7 +901,7 @@ async function executeDeleteStudent() {
     confirmBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Eliminando...';
 
     try {
-        const res = await fetch(`${API_URL}/licencias/1/alumnos/${studentToDeleteId}`, { method: 'DELETE' });
+        const res = await fetch(`${API_URL}/licencias/${LICENCIA_ID}/alumnos/${studentToDeleteId}`, { method: 'DELETE' });
         if (!res.ok) throw new Error("Error al eliminar");
 
         showToast('Alumno eliminado');
@@ -931,10 +932,10 @@ async function saveNewStudent() {
     if (!name) return showToast('Nombre obligatorio', true);
 
     try {
-        await fetch(`${API_URL}/licencias/1/alumnos`, {
+        await fetch(`${API_URL}/licencias/${LICENCIA_ID}/alumnos`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nombre: name, licencia_id: 1 })
+            body: JSON.stringify({ nombre: name, licencia_id: Number(LICENCIA_ID) })
         });
 
         const el = document.getElementById('addStudentModal');
