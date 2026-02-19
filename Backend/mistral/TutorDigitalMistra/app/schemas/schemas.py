@@ -23,6 +23,16 @@ class StudentLogin(BaseModel):
     nombre: str
     token: str
 
+class InstructorLogin(BaseModel):
+    username: str
+    password: str
+
+class InstructorCreate(BaseModel):
+    username: str
+    password: str
+    nombre_completo: str = "Instructor"
+    max_alumnos: int = 10
+
 class ChangePassword(BaseModel):
     user_id: int
     old_password: str
@@ -31,7 +41,8 @@ class ChangePassword(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
-    alumno: 'AlumnoResponse'
+    alumno: Optional['AlumnoResponse'] = None
+    instructor: Optional['InstructorResponse'] = None
 
 class ConocimientoCreate(BaseModel):
     temario_id: int
@@ -102,6 +113,12 @@ class AlumnoResponse(BaseModel):
     token: str
     activo: bool
     must_change_password: bool = True
+
+class InstructorResponse(BaseModel):
+    id: int
+    nombre: str
+    email: str
+    rol: str
 
 class LibroResponse(BaseModel):
     id: int

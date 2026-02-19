@@ -2,7 +2,7 @@ import asyncio
 import secrets
 import string
 from typing import List, Dict
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -611,6 +611,213 @@ def login_student(creds: schemas.StudentLogin, db: Session = Depends(get_db)):
         token_type="bearer",
         alumno=alumno_data
     )
+
+@app.post("/auth/login/instructor", response_model=schemas.Token)
+def login_instructor(creds: schemas.InstructorLogin, db: Session = Depends(get_db)):
+    """
+    Valida credenciales de instructor y devuelve un JWT.
+    """
+    from app.auth import create_access_token 
+
+    # Buscar usuario por nombre (username)
+    user = db.query(modelos.Usuario).filter(
+        modelos.Usuario.nombre == creds.username,
+        modelos.Usuario.rol == 'instructor',
+        modelos.Usuario.activo == True
+    ).first()
+
+    # Si no existe, comprobamos si es el primer login y creamos uno por defecto solo si no hay instructores
+    if not user:
+        count = db.query(modelos.Usuario).filter(modelos.Usuario.rol == 'instructor').count()
+        # Backdoor para primer inicio: admin/admin crea el instructor
+        if count == 0 and creds.username == "admin" and creds.password == "admin":
+             # Create default license if not exists
+             licencia = db.query(modelos.Licencia).filter(modelos.Licencia.id == 1).first()
+             if not licencia:
+                 licencia = modelos.Licencia(id=1, cliente="Demo School", max_alumnos=5, fecha_inicio=datetime.now(), fecha_fin=datetime.now(), activa=True)
+                 db.add(licencia)
+                 db.commit()
+             
+             # Hash password
+             from passlib.context import CryptContext
+             pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+             hashed = pwd_context.hash("admin")
+             
+             user = modelos.Usuario(
+                 nombre="admin",
+                 alias="Instructor Principal",
+                 email="admin@tutor.local",
+                 password_hash=hashed,
+                 rol="instructor",
+                 licencia_id=1,
+                 activo=True,
+                 must_change_password=False
+             )
+             db.add(user)
+             db.commit()
+             db.refresh(user)
+        else:
+            raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+    # Verificar password
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+    
+    if not pwd_context.verify(creds.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+    # Generar JWT
+    access_token = create_access_token(data={"sub": str(user.id)})
+
+    # Mapear InstructorResponse
+    instructor_data = schemas.InstructorResponse(
+        id=user.id,
+        nombre=user.nombre,
+        email=user.email,
+        rol=user.rol
+    )
+
+    return schemas.Token(
+        access_token=access_token,
+        token_type="bearer",
+        instructor=instructor_data
+    )
+
+@app.post("/dev/create-instructor")
+def create_instructor(data: schemas.InstructorCreate, db: Session = Depends(get_db)):
+    """
+    Endpoint para DEVS: Crea un usuario con rol 'instructor'.
+    Hashea la contraseña antes de guardarla.
+    """
+    # 1. Verificar si ya existe
+    existing = db.query(modelos.Usuario).filter(modelos.Usuario.nombre == data.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="El nombre de usuario ya existe")
+
+    # 2. Crear una nueva licencia para este instructor
+    nueva_licencia = modelos.Licencia(
+         cliente=data.nombre_completo, 
+         max_alumnos=data.max_alumnos, 
+         fecha_inicio=datetime.now(), 
+         fecha_fin=datetime.now() + timedelta(days=365), # 1 año
+         activa=True
+    )
+    db.add(nueva_licencia)
+    db.commit() # Commit para obtener el ID
+    db.refresh(nueva_licencia)
+
+    # 3. Hashear password
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+    hashed_password = pwd_context.hash(data.password)
+
+    # 4. Crear usuario
+    nuevo_instructor = modelos.Usuario(
+        nombre=data.username,
+        alias=data.nombre_completo,
+        email=f"{data.username}@instructor.local", # Dummy email
+        password_hash=hashed_password,
+        rol="instructor",
+        licencia_id=nueva_licencia.id,
+        activo=True,
+        must_change_password=False 
+    )
+
+    try:
+        db.add(nuevo_instructor)
+        db.commit()
+        db.refresh(nuevo_instructor)
+        return {"mensaje": f"Instructor '{data.username}' creado con éxito", "id": nuevo_instructor.id}
+    except Exception as e:
+        db.rollback()
+        print(f"Error creando instructor: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/dev/instructors", response_model=List[schemas.InstructorResponse])
+def list_instructors(db: Session = Depends(get_db)):
+    """
+    Endpoint para DEVS: Lista todos los instructores.
+    """
+    instructors = db.query(modelos.Usuario).filter(modelos.Usuario.rol == 'instructor').all()
+    return [
+        schemas.InstructorResponse(
+            id=i.id,
+            nombre=i.nombre,
+            email=i.email,
+            rol=i.rol
+        ) for i in instructors
+    ]
+
+@app.delete("/dev/instructor/{user_id}")
+def delete_instructor(user_id: int, db: Session = Depends(get_db)):
+    """
+    Endpoint para DEVS: Elimina un instructor por ID.
+    """
+    user = db.query(modelos.Usuario).filter(modelos.Usuario.id == user_id, modelos.Usuario.rol == 'instructor').first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Instructor no encontrado")
+        
+    try:
+        # Borrar también su licencia creada
+        licencia_id = user.licencia_id
+        
+        # Eliminar usuario
+        db.delete(user)
+        
+        # Eliminar licencia si no es la default (1) y no tiene otros usuarios (opcional, por ahora borramos si es única)
+        if licencia_id != 1:
+             other_users = db.query(modelos.Usuario).filter(modelos.Usuario.licencia_id == licencia_id).count()
+             if other_users == 0:
+                 db.query(modelos.Licencia).filter(modelos.Licencia.id == licencia_id).delete()
+
+        db.commit()
+        return {"mensaje": "Instructor eliminado correctamente"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/dev/instructors", response_model=List[schemas.InstructorResponse])
+def list_instructors(db: Session = Depends(get_db)):
+    """
+    Endpoint para DEVS: Lista todos los instructores.
+    """
+    instructors = db.query(modelos.Usuario).filter(modelos.Usuario.rol == 'instructor').all()
+    return [
+        schemas.InstructorResponse(
+            id=i.id,
+            nombre=i.nombre,
+            email=i.email,
+            rol=i.rol
+        ) for i in instructors
+    ]
+
+@app.delete("/dev/instructor/{user_id}")
+def delete_instructor(user_id: int, db: Session = Depends(get_db)):
+    """
+    Endpoint para DEVS: Elimina un instructor por ID.
+    """
+    user = db.query(modelos.Usuario).filter(modelos.Usuario.id == user_id, modelos.Usuario.rol == 'instructor').first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Instructor no encontrado")
+        
+    try:
+        # Borrar también su licencia creada
+        licencia_id = user.licencia_id
+        
+        # Eliminar usuario
+        db.delete(user)
+        
+        # Eliminar licencia si no es la default (1) y no tiene otros usuarios (opcional, por ahora borramos si es única)
+        if licencia_id != 1:
+             other_users = db.query(modelos.Usuario).filter(modelos.Usuario.licencia_id == licencia_id).count()
+             if other_users == 0:
+                 db.query(modelos.Licencia).filter(modelos.Licencia.id == licencia_id).delete()
+
+        db.commit()
+        return {"mensaje": "Instructor eliminado correctamente"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/auth/change-password")
 def change_password(payload: schemas.ChangePassword, db: Session = Depends(get_db)):

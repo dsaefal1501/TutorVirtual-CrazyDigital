@@ -307,6 +307,99 @@ html {
     /* COLOR AL PASAR EL RATÓN */
 }
 
+/* --- BLINK ANIMATIONS (Path Morphing & Masking) --- */
+.eye-left {
+    animation: drawPath 1.5s ease-out forwards, blinkPathLeft 5s infinite 2s !important;
+}
+
+.eye-right {
+    animation: drawPath 1.5s ease-out forwards, blinkPathRight 5s infinite 2s !important;
+}
+
+.clip-left {
+    animation: blinkPathLeft 5s infinite 2s !important;
+}
+
+.clip-right {
+    animation: blinkPathRight 5s infinite 2s !important;
+}
+
+.logo-path-c {
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 26.6;
+    opacity: 0;
+    transform-origin: center;
+    transform-box: fill-box;
+    animation: fadeInScale 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards 0.6s, lookAround 8s infinite 2s;
+}
+
+@keyframes blinkPathLeft {
+
+    0%,
+    45%,
+    55%,
+    100% {
+        d: path("m 803.38981,592.25277 c 0,88.96465 5.93388,161.08474 -113.49152,161.08475 -119.4254,10e-6 -113.49153,-72.12009 -113.49153,-161.08475 0,-88.96466 50.81189,-161.08476 113.49153,-161.08475 62.67964,0 113.49152,72.1201 113.49152,161.08475 z");
+    }
+
+    50% {
+        d: path("m 803.38981,592.25277 c 0,88.96465 5.93388,161.08474 -113.49152,161.08475 -119.4254,10e-6 -113.49153,-72.12009 -113.49153,-161.08475 0,88.96466 50.81189,161.08476 113.49153,161.08475 62.67964,0 113.49152,-72.1201 113.49152,-161.08475 z");
+    }
+}
+
+@keyframes blinkPathRight {
+
+    0%,
+    45%,
+    55%,
+    100% {
+        d: path("m 1345.3898,592.25277 c 0,88.96465 5.9339,161.08474 -113.4915,161.08475 -119.4254,10e-6 -113.4916,-72.12009 -113.4916,-161.08475 0,-88.96466 50.8119,-161.08476 113.4916,-161.08475 62.6796,0 113.4915,72.1201 113.4915,161.08475 z");
+    }
+
+    50% {
+        d: path("m 1345.3898,592.25277 c 0,88.96465 5.9339,161.08474 -113.4915,161.08475 -119.4254,10e-6 -113.4916,-72.12009 -113.4916,-161.08475 0,88.96466 50.8119,161.08476 113.4916,161.08475 62.6796,0 113.4915,-72.1201 113.4915,-161.08475 z");
+    }
+}
+
+@keyframes lookAround {
+
+    0%,
+    100% {
+        transform: translate(0, 0);
+    }
+
+    10% {
+        transform: translate(15px, 0);
+    }
+
+    20% {
+        transform: translate(15px, 0);
+    }
+
+    30% {
+        transform: translate(-15px, 0);
+    }
+
+    40% {
+        transform: translate(-15px, 0);
+    }
+
+    50% {
+        transform: translate(0, -10px);
+    }
+
+    60% {
+        transform: translate(0, -10px);
+    }
+
+    70% {
+        transform: translate(0, 0);
+    }
+}
+
 .sidebar-menu {
     display: flex;
     flex-direction: column;

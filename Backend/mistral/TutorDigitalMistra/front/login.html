@@ -576,7 +576,8 @@
                 <form onsubmit="handleLoginInstructor(event)">
                     <div class="input-group-custom">
                         <label class="label-custom">Usuario Instructor</label>
-                        <input type="text" class="input-field" placeholder="Usuario Instructor" required>
+                        <input type="text" id="user-instructor" class="input-field" placeholder="Usuario Instructor"
+                            required>
                     </div>
                     <div class="input-group-custom">
                         <label class="label-custom">Contraseña</label>
@@ -780,15 +781,44 @@
         // ==================================================
         // LOGIN INSTRUCTOR — Redirige SIEMPRE a instructor.html
         // ==================================================
-        function handleLoginInstructor(e) {
+        // ==================================================
+        // LOGIN INSTRUCTOR — Fetch API Validation
+        // ==================================================
+        async function handleLoginInstructor(e) {
             e.preventDefault();
             const btn = document.getElementById('btnLoginInstructor');
-            btn.innerText = "Validando...";
+            const userVal = document.getElementById('user-instructor').value;
+            const passVal = document.getElementById('pass-instructor').value;
 
-            setTimeout(() => {
-                sessionStorage.setItem('userRole', 'Instructor');
-                window.location.href = "instructor.html";
-            }, 1000);
+            btn.innerText = "Validando...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}/auth/login/instructor`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: userVal, password: passVal })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // Guardar datos básicos
+                    sessionStorage.setItem('userRole', 'Instructor');
+                    sessionStorage.setItem('userId', data.instructor.id);
+                    sessionStorage.setItem('userName', data.instructor.nombre);
+                    localStorage.setItem('authToken', data.access_token);
+
+                    window.location.href = "instructor.html";
+                } else {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Error de autenticación');
+                }
+            } catch (error) {
+                alert("Error: " + error.message);
+                btn.innerText = "Entrar como Instructor";
+                btn.disabled = false;
+            }
         }
     </script>
 </body>
