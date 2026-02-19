@@ -1,5 +1,7 @@
 /* devs.js */
 const API_URL = 'http://127.0.0.1:8000';
+let openLicenseIds = new Set();
+
 
 // ---- MAIN INITIALIZATION ----
 document.addEventListener('DOMContentLoaded', () => {
@@ -130,12 +132,15 @@ async function loadInstructors() {
             return;
         }
 
-        tableBody.innerHTML = ''; // Limpiar tabla
+        tableBody.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+
         instructors.forEach(instruct => {
             const row = document.createElement('tr');
-
-            const name = instruct.nombre || '-'; // nombre de usuario (login)
+            const name = instruct.nombre || '-';
             const email = instruct.email || '-';
+            const licId = instruct.licencia_id;
+            const isExpanded = openLicenseIds.has(licId);
 
             row.innerHTML = `
                 <td>#${instruct.id}</td>
@@ -143,13 +148,49 @@ async function loadInstructors() {
                 <td>${email}</td>
                 <td><span class="badge" style="background:rgba(59,130,246,0.2); color:#60a5fa; padding:4px 8px; border-radius:4px; font-size:0.75rem;">${instruct.rol}</span></td>
                 <td>
+                    <button class="btn-icon view-students ${isExpanded ? 'active' : ''}" title="Ver Alumnos" onclick="toggleStudents(this, ${licId})" style="margin-right:8px; color:#34d399; background:rgba(16,185,129,0.1);">
+                        <i class="bi ${isExpanded ? 'bi-chevron-up' : 'bi-people'}"></i>
+                    </button>
                     <button class="btn-icon delete" title="Eliminar" onclick="deleteInstructor(${instruct.id}, '${name}')">
                         <i class="bi bi-trash"></i>
                     </button>
                 </td>
             `;
-            tableBody.appendChild(row);
+            fragment.appendChild(row);
+
+            // Row for sub-table
+            const subRow = document.createElement('tr');
+            subRow.className = 'sub-table-row';
+            subRow.style.display = isExpanded ? 'table-row' : 'none';
+            subRow.innerHTML = `
+                <td colspan="5" style="padding:0; background:rgba(255,255,255,0.02);">
+                    <div class="sub-table-container" style="padding:15px 20px; border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:10px;"><i class="bi bi-person-badge"></i> Alumnos asociados a Licencia #${licId}</div>
+                        <table class="data-table" style="width:100%; font-size:0.85rem;">
+                            <thead>
+                                <tr style="background:rgba(0,0,0,0.2);">
+                                    <th style="padding:8px;">ID</th>
+                                    <th style="padding:8px;">Nombre</th>
+                                    <th style="padding:8px;">Usuario</th>
+                                    <th style="padding:8px;">Token</th>
+                                    <th style="padding:8px;">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="students-list-${licId}">
+                                ${isExpanded ? '<tr><td colspan="5" class="text-center text-muted">Actualizando...</td></tr>' : ''}
+                            </tbody>
+                        </table>
+                    </div>
+                </td>
+            `;
+            fragment.appendChild(subRow);
+
+            if (isExpanded) {
+                fetchAndRenderStudents(licId);
+            }
         });
+        tableBody.appendChild(fragment);
+
 
     } catch (e) {
         console.error(e);
@@ -235,6 +276,151 @@ async function deleteInstructor(id, name) {
 
     } catch (e) {
         alert("Error: " + e.message);
+    }
+}
+
+// ---- VIEW STUDENTS INSTRUCTOR ----
+async function fetchAndRenderStudents(licId) {
+    const tbody = document.getElementById(`students-list-${licId}`);
+    if (!tbody) return;
+
+    try {
+        const res = await fetch(`${API_URL}/licencias/${licId}/alumnos`);
+        if (!res.ok) throw new Error("Error fetching students");
+
+        const students = await res.json();
+
+        if (students.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:15px; font-size:0.85rem;">No hay alumnos registrados.</td></tr>';
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        students.forEach(s => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+            const tokenDisplay = s.token ? `<span class="copy-token" onclick="navigator.clipboard.writeText('${s.token}').then(()=>alert('Token copiado'))" style="cursor:pointer" title="Click para copiar">${s.token.substring(0, 8)}...</span>` : '-';
+
+            tr.innerHTML = `
+                <td style="padding:8px 12px; color:#94a3b8;">${s.id}</td>
+                <td style="padding:8px 12px; color:#e2e8f0; font-weight:500;">${s.alias || s.nombre}</td>
+                <td style="padding:8px 12px; color:#9ca3af;" class="user-select-all">${s.nombre}</td>
+                <td style="padding:8px 12px; font-family:monospace; color:#60a5fa;">${tokenDisplay}</td>
+                <td style="padding:8px 12px;">
+                    <span class="badge" style="background:${s.activo ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color:${s.activo ? '#34d399' : '#f87171'}; font-size:0.7rem;">
+                        ${s.activo ? 'Activo' : 'Inactivo'}
+                    </span>
+                </td>
+            `;
+            fragment.appendChild(tr);
+        });
+
+        tbody.innerHTML = '';
+        tbody.appendChild(fragment);
+
+    } catch (e) {
+        console.error(e);
+        tbody.innerHTML = `<tr><td colspan="5" class="text-danger text-center" style="padding:10px;">Error: ${e.message}</td></tr>`;
+    }
+}
+
+async function toggleStudents(btn, licId) {
+    const row = btn.closest('tr');
+    const subRow = row.nextElementSibling;
+
+    if (!subRow || !subRow.classList.contains('sub-table-row')) {
+        console.error("Sub-row not found for toggle");
+        return;
+    }
+
+    if (openLicenseIds.has(licId)) {
+        openLicenseIds.delete(licId);
+        subRow.style.display = 'none';
+        btn.innerHTML = '<i class="bi bi-people"></i>';
+        btn.classList.remove('active');
+    } else {
+        openLicenseIds.add(licId);
+        subRow.style.display = 'table-row';
+        btn.innerHTML = '<i class="bi bi-chevron-up"></i>';
+        btn.classList.add('active');
+
+        const tbody = document.getElementById(`students-list-${licId}`);
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:10px;"><div class="spinner-border spinner-border-sm text-secondary"></div> <span class="text-muted">Cargando alumnos...</span></td></tr>';
+
+        fetchAndRenderStudents(licId);
+    }
+}
+
+// ---- VIEW STUDENTS INSTRUCTOR ----
+async function fetchAndRenderStudents(licId) {
+    const tbody = document.getElementById(`students-list-${licId}`);
+    if (!tbody) return;
+
+    try {
+        const res = await fetch(`${API_URL}/licencias/${licId}/alumnos`);
+        if (!res.ok) throw new Error("Error fetching students");
+
+        const students = await res.json();
+
+        if (students.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:15px; font-size:0.85rem;">No hay alumnos registrados.</td></tr>';
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        students.forEach(s => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+            // Token copy feature
+            const tokenDisplay = s.token ? `<span class="copy-token" onclick="navigator.clipboard.writeText('${s.token}').then(()=>alert('Token copiado'))" style="cursor:pointer" title="Click para copiar">${s.token.substring(0, 8)}...</span>` : '-';
+
+            tr.innerHTML = `
+                <td style="padding:8px 12px; color:#94a3b8;">${s.id}</td>
+                <td style="padding:8px 12px; color:#e2e8f0; font-weight:500;">${s.alias || s.nombre}</td>
+                <td style="padding:8px 12px; color:#9ca3af;" class="user-select-all">${s.nombre}</td>
+                <td style="padding:8px 12px; font-family:monospace; color:#60a5fa;">${tokenDisplay}</td>
+                <td style="padding:8px 12px;">
+                    <span class="badge" style="background:${s.activo ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color:${s.activo ? '#34d399' : '#f87171'}; font-size:0.7rem;">
+                        ${s.activo ? 'Activo' : 'Inactivo'}
+                    </span>
+                </td>
+            `;
+            fragment.appendChild(tr);
+        });
+
+        tbody.innerHTML = '';
+        tbody.appendChild(fragment);
+
+    } catch (e) {
+        console.error(e);
+        tbody.innerHTML = `<tr><td colspan="5" class="text-danger text-center" style="padding:10px;">Error: ${e.message}</td></tr>`;
+    }
+}
+
+async function toggleStudents(btn, licId) {
+    const row = btn.closest('tr');
+    const subRow = row.nextElementSibling;
+
+    if (!subRow || !subRow.classList.contains('sub-table-row')) {
+        console.error("Sub-row not found for toggle");
+        return;
+    }
+
+    if (openLicenseIds.has(licId)) {
+        openLicenseIds.delete(licId);
+        subRow.style.display = 'none';
+        btn.innerHTML = '<i class="bi bi-people"></i>';
+        btn.classList.remove('active');
+    } else {
+        openLicenseIds.add(licId);
+        subRow.style.display = 'table-row';
+        btn.innerHTML = '<i class="bi bi-chevron-up"></i>';
+        btn.classList.add('active');
+
+        const tbody = document.getElementById(`students-list-${licId}`);
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:10px;"><div class="spinner-border spinner-border-sm text-secondary"></div> <span class="text-muted">Cargando alumnos...</span></td></tr>';
+
+        fetchAndRenderStudents(licId);
     }
 }
 
