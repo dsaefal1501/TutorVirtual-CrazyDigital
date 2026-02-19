@@ -117,6 +117,7 @@ class AlumnoResponse(BaseModel):
 class InstructorResponse(BaseModel):
     id: int
     nombre: str
+    alias: Optional[str] = None
     email: str
     rol: str
     licencia_id: int

@@ -230,7 +230,7 @@ html {
     color: var(--primary-500);
     height: auto;
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    animation: floatLogo 6s infinite ease-in-out;
+    /* animation: floatLogo 6s infinite ease-in-out; REMOVED per request */
     shape-rendering: geometricPrecision;
 }
 

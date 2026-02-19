@@ -845,6 +845,7 @@ def list_instructors(db: Session = Depends(get_db)):
         schemas.InstructorResponse(
             id=i.id,
             nombre=i.nombre,
+            alias=i.alias,
             email=i.email,
             rol=i.rol,
             licencia_id=i.licencia_id

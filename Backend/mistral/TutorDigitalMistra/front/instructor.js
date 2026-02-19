@@ -20,6 +20,23 @@ const progressBar = document.getElementById('progressBar');
 document.addEventListener('DOMContentLoaded', () => {
     checkSyllabusStatus();
 
+    // --- Set Profile (Instructor) ---
+    const userName = sessionStorage.getItem('userAlias') || sessionStorage.getItem('userName') || 'Instructor';
+    const avatarEl = document.getElementById('instructorAvatar');
+    const nameEl = document.getElementById('instructorName');
+
+    if (nameEl) nameEl.textContent = userName;
+    if (avatarEl) {
+        const initial = userName.charAt(0).toUpperCase();
+        avatarEl.textContent = initial;
+
+        // Random color based on char code
+        const colors = ['#f56565', '#ed8936', '#ecc94b', '#48bb78', '#38b2ac', '#4299e1', '#667eea', '#9f7aea', '#ed64a6'];
+        const index = initial.charCodeAt(0) % colors.length;
+        avatarEl.style.backgroundColor = colors[index];
+        avatarEl.style.color = '#fff';
+    }
+
     // Restore active tab
     const savedTab = localStorage.getItem('instructorActiveTab');
     if (savedTab) {

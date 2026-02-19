@@ -139,7 +139,7 @@
             color: var(--primary);
             height: auto;
             transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            animation: floatLogo 6s infinite ease-in-out;
+            /* animation: floatLogo 6s infinite ease-in-out; */
             shape-rendering: geometricPrecision;
         }
 
@@ -814,6 +814,7 @@
                     sessionStorage.setItem('userRole', 'Instructor');
                     sessionStorage.setItem('userId', instr.id);
                     sessionStorage.setItem('userName', instr.nombre);
+                    sessionStorage.setItem('userAlias', instr.alias || instr.nombre);
                     sessionStorage.setItem('licenciaId', instr.licencia_id);
                     localStorage.setItem('authToken', data.access_token);
 

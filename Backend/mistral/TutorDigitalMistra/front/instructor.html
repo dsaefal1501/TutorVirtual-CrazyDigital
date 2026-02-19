@@ -93,11 +93,11 @@
 
             </nav>
             <div class="sidebar-footer">
-                <div class="user-profile-simple">
-                    <div class="profile-avatar-simple"><i class="bi bi-person-fill"></i></div>
+                <div class="user-profile-simple" onclick="logoutUser()" style="cursor: pointer;" title="Cerrar Sesión">
+                    <div id="instructorAvatar" class="profile-avatar-simple">I</div>
                     <div class="profile-info-simple">
-                        <div class="profile-name-simple">Instructor</div>
-                        <div class="profile-role-simple">Admin</div>
+                        <div id="instructorName" class="profile-name-simple">Instructor</div>
+                        <div class="profile-role-simple">Instructor</div>
                     </div>
                 </div>
                 <button class="btn-logout-sidebar" onclick="window.location.href='login.html'">

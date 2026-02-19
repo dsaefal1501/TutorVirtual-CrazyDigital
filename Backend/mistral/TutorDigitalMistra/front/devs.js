@@ -185,21 +185,24 @@ async function loadInstructors() {
 
         instructors.forEach(instruct => {
             const row = document.createElement('tr');
-            const name = instruct.nombre || '-';
-            const email = instruct.email || '-';
+            const username = instruct.nombre || '-'; // Login
+            const alias = instruct.alias || '-';      // Nombre real
             const licId = instruct.licencia_id;
             const isExpanded = openLicenseIds.has(licId);
 
             row.innerHTML = `
                 <td>#${instruct.id}</td>
-                <td><span style="font-weight:600; color:#fff">${name}</span></td>
-                <td>${email}</td>
+                <td style="display:flex; flex-direction:column; gap:2px;">
+                    <span style="font-weight:600; color:#fff">${alias}</span>
+                    <span style="font-size:0.8rem; color:#94a3b8; font-family:monospace;">@${username}</span>
+                </td>
+                <td>${instruct.email}</td>
                 <td><span class="badge" style="background:rgba(59,130,246,0.2); color:#60a5fa; padding:4px 8px; border-radius:4px; font-size:0.75rem;">${instruct.rol}</span></td>
                 <td>
                     <button class="btn-icon view-students ${isExpanded ? 'active' : ''}" title="Ver Alumnos" onclick="toggleStudents(this, ${licId})" style="margin-right:8px; color:#34d399; background:rgba(16,185,129,0.1);">
                         <i class="bi ${isExpanded ? 'bi-chevron-up' : 'bi-people'}"></i>
                     </button>
-                    <button class="btn-icon delete" title="Eliminar" onclick="deleteInstructor(${instruct.id}, '${name}')">
+                    <button class="btn-icon delete" title="Eliminar" onclick="deleteInstructor(${instruct.id}, '${username}')">
                         <i class="bi bi-trash"></i>
                     </button>
                 </td>
