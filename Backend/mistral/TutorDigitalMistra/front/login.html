@@ -761,8 +761,14 @@
                 });
 
                 if (response.ok) {
-                    // Contraseña actualizada, redirigir de inmediato
-                    window.location.href = 'tutor.html';
+                    // Contraseña actualizada
+                    // Redirigir según el Rol guardado en Session
+                    const role = sessionStorage.getItem('userRole');
+                    if (role === 'Instructor') {
+                        window.location.href = 'instructor.html';
+                    } else {
+                        window.location.href = 'tutor.html';
+                    }
                 } else {
 
                     const errData = await response.json();
@@ -804,13 +810,35 @@
                     const data = await response.json();
 
                     // Guardar datos básicos
+                    const instr = data.instructor;
                     sessionStorage.setItem('userRole', 'Instructor');
-                    sessionStorage.setItem('userId', data.instructor.id);
-                    sessionStorage.setItem('userName', data.instructor.nombre);
-                    sessionStorage.setItem('licenciaId', data.instructor.licencia_id);
+                    sessionStorage.setItem('userId', instr.id);
+                    sessionStorage.setItem('userName', instr.nombre);
+                    sessionStorage.setItem('licenciaId', instr.licencia_id);
                     localStorage.setItem('authToken', data.access_token);
 
-                    window.location.href = "instructor.html";
+                    // VERIFICAR CAMBIO DE CONTRASEÑA
+                    // Nota: el endpoint login/instructor devuelve un Token con "instructor" dentro.
+                    // Necesitamos asegurar que el backend devuelva "must_change_password" dentro del objeto instructor.
+                    // Si no viene, asumimos false.
+                    if (instr.must_change_password) {
+                        // Guardar credenciales temporales en memoria
+                        tempUserId = instr.id;
+                        tempOldPass = passVal;
+
+                        // Ocultar login instructor, mostrar cambio pass
+                        document.getElementById("view-login-instructor").style.display = "none";
+                        document.getElementById("view-change-password").style.display = "block";
+
+                        btn.innerText = "Entrar como Instructor";
+                        btn.disabled = false;
+
+                        // Modificar handler de cambio de pass para redirigir a instructor.html si el rol es Instructor
+                        // (Ver handleChangePassword abajo)
+                    } else {
+                        window.location.href = "instructor.html";
+                    }
+
                 } else {
                     const errData = await response.json();
                     throw new Error(errData.detail || 'Error de autenticación');

@@ -28,8 +28,8 @@ class InstructorLogin(BaseModel):
     password: str
 
 class InstructorCreate(BaseModel):
-    username: str
-    password: str
+    username: Optional[str] = None
+    password: Optional[str] = None
     nombre_completo: str = "Instructor"
     max_alumnos: int = 10
 
@@ -120,6 +120,7 @@ class InstructorResponse(BaseModel):
     email: str
     rol: str
     licencia_id: int
+    must_change_password: bool = False
 
 class LibroResponse(BaseModel):
     id: int

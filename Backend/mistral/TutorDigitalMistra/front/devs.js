@@ -8,7 +8,7 @@ let lastLicensesData = null;
 document.addEventListener('DOMContentLoaded', () => {
     // Inicializar vista
     // Inicializar vista
-    switchTab('create');
+    switchTab('list');
     loadInstructors(); // Cargar la lista en segundo plano
 
     // Auto-refresco en tiempo real (Polling cada 2s)
@@ -19,6 +19,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, 2000);
 });
+
+// ---- FORM TOGGLE ----
+function toggleCreateForm() {
+    const container = document.getElementById('create-form-container');
+    const form = document.querySelector('#create-form-container form');
+    const credsBox = document.getElementById('newCredentialsBox');
+
+    if (!container) return;
+
+    if (container.style.display === 'none') {
+        container.style.display = 'block';
+        // Reset view to form
+        if (form) form.style.display = 'grid';
+        if (credsBox) credsBox.style.display = 'none';
+        document.getElementById('msgBoxCreate').style.display = 'none';
+
+    } else {
+        container.style.display = 'none';
+    }
+}
 
 // ---- NAVIGATION ----
 function switchTab(tabId) {
@@ -53,35 +73,33 @@ function switchTab(tabId) {
 
 // ---- CREATE INSTRUCTOR ----
 async function createInstructor() {
-    const username = document.getElementById('username').value.trim();
     const fullname = document.getElementById('fullname').value.trim();
     const maxStudents = document.getElementById('maxStudents').value;
-    const passInput = document.getElementById('password');
-    const password = passInput.value.trim();
     const msgBox = document.getElementById('msgBoxCreate');
     const btn = document.getElementById('btnCreate');
+    const credsBox = document.getElementById('newCredentialsBox');
+    const form = document.querySelector('#create-form-container form');
 
     // Reset mensajes
     msgBox.style.display = 'none';
     msgBox.className = 'message-box';
+    credsBox.style.display = 'none';
 
-    if (!username || !password || !fullname) {
-        showMessage(msgBox, 'Por favor completa todos los campos.', 'error');
+    if (!fullname) {
+        showMessage(msgBox, 'Por favor ingresa un nombre.', 'error');
         return;
     }
 
     // UI Loading
     const originalText = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generando...';
 
     try {
         const response = await fetch(`${API_URL}/dev/create-instructor`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                username: username,
-                password: password,
                 nombre_completo: fullname,
                 max_alumnos: parseInt(maxStudents) || 10
             })
@@ -90,14 +108,20 @@ async function createInstructor() {
         const data = await response.json();
 
         if (response.ok) {
+            // Hide form, show success
+            if (form) form.style.display = 'none';
+
+            document.getElementById('newUsername').textContent = data.username;
+            document.getElementById('newPassword').textContent = data.password;
+
+            credsBox.style.display = 'block';
             showMessage(msgBox, `¡Éxito! ${data.mensaje}`, 'success');
-            // Limpiar formulario
-            document.getElementById('username').value = '';
+
+            // Limpiar formulario para la próxima
             document.getElementById('fullname').value = '';
             document.getElementById('maxStudents').value = '10';
-            passInput.value = '';
 
-            // Recargar lista para que aparezca el nuevo
+            // Recargar lista
             loadInstructors();
         } else {
             throw new Error(data.detail || 'Error desconocido');
@@ -110,6 +134,19 @@ async function createInstructor() {
         btn.disabled = false;
         btn.innerHTML = originalText;
     }
+}
+
+function copyCredentials() {
+    const u = document.getElementById('newUsername').textContent;
+    const p = document.getElementById('newPassword').textContent;
+    const text = `Credenciales HoloMentor:\nUsuario: ${u}\nContraseña: ${p}`;
+
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.querySelector('#newCredentialsBox button');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check2"></i> ¡Copiado!';
+        setTimeout(() => btn.innerHTML = originalText, 2000);
+    });
 }
 
 // ---- LIST INSTRUCTORS ----
@@ -309,28 +346,27 @@ async function fetchAndRenderStudents(licId) {
             return;
         }
 
-        const fragment = document.createDocumentFragment();
+        let newHtml = '';
         students.forEach(s => {
-            const tr = document.createElement('tr');
-            tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
             const tokenDisplay = s.token ? `<span class="copy-token" onclick="navigator.clipboard.writeText('${s.token}').then(()=>alert('Token copiado'))" style="cursor:pointer" title="Click para copiar">${s.token.substring(0, 8)}...</span>` : '-';
-
-            tr.innerHTML = `
-                <td style="padding:8px 12px; color:#94a3b8;">${s.id}</td>
-                <td style="padding:8px 12px; color:#e2e8f0; font-weight:500;">${s.alias || s.nombre}</td>
-                <td style="padding:8px 12px; color:#9ca3af;" class="user-select-all">${s.nombre}</td>
-                <td style="padding:8px 12px; font-family:monospace; color:#60a5fa;">${tokenDisplay}</td>
-                <td style="padding:8px 12px;">
-                    <span class="badge" style="background:${s.activo ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color:${s.activo ? '#34d399' : '#f87171'}; font-size:0.7rem;">
-                        ${s.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                </td>
+            newHtml += `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05)">
+                    <td style="padding:8px 12px; color:#94a3b8;">${s.id}</td>
+                    <td style="padding:8px 12px; color:#e2e8f0; font-weight:500;">${s.alias || s.nombre}</td>
+                    <td style="padding:8px 12px; color:#9ca3af;" class="user-select-all">${s.nombre}</td>
+                    <td style="padding:8px 12px; font-family:monospace; color:#60a5fa;">${tokenDisplay}</td>
+                    <td style="padding:8px 12px;">
+                        <span class="badge" style="background:${s.activo ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color:${s.activo ? '#34d399' : '#f87171'}; font-size:0.7rem;">
+                            ${s.activo ? 'Activo' : 'Inactivo'}
+                        </span>
+                    </td>
+                </tr>
             `;
-            fragment.appendChild(tr);
         });
 
-        tbody.innerHTML = '';
-        tbody.appendChild(fragment);
+        if (tbody.innerHTML !== newHtml) {
+            tbody.innerHTML = newHtml;
+        }
 
     } catch (e) {
         console.error(e);
@@ -363,49 +399,6 @@ async function toggleStudents(btn, licId) {
     }
 }
 
-// ---- VIEW STUDENTS INSTRUCTOR ----
-async function fetchAndRenderStudents(licId) {
-    const tbody = document.getElementById(`students-list-${licId}`);
-    if (!tbody) return;
-
-    try {
-        const res = await fetch(`${API_URL}/licencias/${licId}/alumnos`);
-        if (!res.ok) throw new Error("Error fetching students");
-
-        const students = await res.json();
-
-        if (students.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:15px; font-size:0.85rem;">No hay alumnos registrados.</td></tr>';
-            return;
-        }
-
-        let newHtml = '';
-        students.forEach(s => {
-            const tokenDisplay = s.token ? `<span class="copy-token" onclick="navigator.clipboard.writeText('${s.token}').then(()=>alert('Token copiado'))" style="cursor:pointer" title="Click para copiar">${s.token.substring(0, 8)}...</span>` : '-';
-            newHtml += `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05)">
-                    <td style="padding:8px 12px; color:#94a3b8;">${s.id}</td>
-                    <td style="padding:8px 12px; color:#e2e8f0; font-weight:500;">${s.alias || s.nombre}</td>
-                    <td style="padding:8px 12px; color:#9ca3af;" class="user-select-all">${s.nombre}</td>
-                    <td style="padding:8px 12px; font-family:monospace; color:#60a5fa;">${tokenDisplay}</td>
-                    <td style="padding:8px 12px;">
-                        <span class="badge" style="background:${s.activo ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color:${s.activo ? '#34d399' : '#f87171'}; font-size:0.7rem;">
-                            ${s.activo ? 'Activo' : 'Inactivo'}
-                        </span>
-                    </td>
-                </tr>
-            `;
-        });
-
-        if (tbody.innerHTML !== newHtml) {
-            tbody.innerHTML = newHtml;
-        }
-
-    } catch (e) {
-        console.error(e);
-        tbody.innerHTML = `<tr><td colspan="5" class="text-danger text-center" style="padding:10px;">Error: ${e.message}</td></tr>`;
-    }
-}
 
 
 // ---- UTILS ----

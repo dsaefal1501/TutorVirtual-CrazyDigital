@@ -700,7 +700,8 @@ def login_instructor(creds: schemas.InstructorLogin, db: Session = Depends(get_d
         nombre=user.nombre,
         email=user.email,
         rol=user.rol,
-        licencia_id=user.licencia_id
+        licencia_id=user.licencia_id,
+        must_change_password=user.must_change_password
     )
 
     return schemas.Token(
@@ -715,14 +716,44 @@ def create_instructor(data: schemas.InstructorCreate, db: Session = Depends(get_
     Endpoint para DEVS: Crea un usuario con rol 'instructor'.
     Hashea la contraseña antes de guardarla.
     """
-    # 1. Verificar si ya existe
-    existing = db.query(modelos.Usuario).filter(modelos.Usuario.nombre == data.username).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="El nombre de usuario ya existe")
+    # 0. Auto-generar credenciales
+    import string
+    import secrets
+
+    # REGLA: 
+    # data.nombre_completo -> ALIAS (Nombre Real, ej: "Juan Pérez")
+    # generated_username -> NOMBRE (Login, ej: "JP49201")
+    
+    alias_real = data.nombre_completo
+    
+    # Generar username igual que alumnos (Iniciales + 5 dígitos)
+    # Reutilizamos la lógica si es accesible o la replicamos
+    parts = alias_real.strip().split()
+    if not parts:
+        initials = "IN" # Instructor
+    else:
+        initials = "".join([p[0] for p in parts if p]).upper()
+    
+    digits = "".join(secrets.choice(string.digits) for _ in range(5))
+    generated_username = f"{initials}{digits}"
+
+    # Generar Password (Token)
+    generated_password = data.password
+    if not generated_password:
+        caracteres = string.ascii_letters + string.digits
+        generated_password = ''.join(secrets.choice(caracteres) for _ in range(8))
+
+    # 1. Verificar si ya existe (el generado)
+    # Retry simple
+    if db.query(modelos.Usuario).filter(modelos.Usuario.nombre == generated_username).first():
+        digits = "".join(secrets.choice(string.digits) for _ in range(5))
+        generated_username = f"{initials}{digits}"
+        if db.query(modelos.Usuario).filter(modelos.Usuario.nombre == generated_username).first():
+             raise HTTPException(status_code=400, detail="Error de colisión de usuario, intente de nuevo")
 
     # 2. Crear una nueva licencia para este instructor
     nueva_licencia = modelos.Licencia(
-         cliente=data.nombre_completo, 
+         cliente=alias_real, 
          max_alumnos=data.max_alumnos, 
          fecha_inicio=datetime.now(), 
          fecha_fin=datetime.now() + timedelta(days=365), # 1 año
@@ -732,21 +763,29 @@ def create_instructor(data: schemas.InstructorCreate, db: Session = Depends(get_
     db.commit() # Commit para obtener el ID
     db.refresh(nueva_licencia)
 
-    # 3. Hashear password
+    # 3. Hashear password (Token temporal)
+    # El instructor usará este token como password la primera vez
+    # En el login, si must_change_password=True, comparamos hash vs token (o plano si así está implementado en login alumno)
+    # REVISANDO LOGIN ALUMNO: 
+    # - Si must_change_password es True, compara hash == token PLANO (user.password_hash == creds.token)
+    # - Por lo tanto, aquí debemos guardar el token PLANO en password_hash inicialmente si queremos seguir esa lógica
+    # - PERO: Instructor login suele usar hash.
+    # - Vamos a guardar el HASH del token, y en login verificamos HASH vs TOKEN.
+    
     from passlib.context import CryptContext
     pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
-    hashed_password = pwd_context.hash(data.password)
+    hashed_password = pwd_context.hash(generated_password)
 
     # 4. Crear usuario
     nuevo_instructor = modelos.Usuario(
-        nombre=data.username,
-        alias=data.nombre_completo,
-        email=f"{data.username}@instructor.local", # Dummy email
-        password_hash=hashed_password,
+        nombre=generated_username,      # Login (ej: JP84920)
+        alias=alias_real,               # Nombre Real (ej: Juan Pérez)
+        email=f"{generated_username}@instructor.local", # Dummy email
+        password_hash=hashed_password,  # Hash del token
         rol="instructor",
         licencia_id=nueva_licencia.id,
         activo=True,
-        must_change_password=False 
+        must_change_password=True       # Obligar cambio
     )
 
     try:
@@ -754,7 +793,12 @@ def create_instructor(data: schemas.InstructorCreate, db: Session = Depends(get_
         db.commit()
         db.refresh(nuevo_instructor)
         
-        return {"mensaje": f"Instructor '{data.username}' creado con éxito", "id": nuevo_instructor.id}
+        return {
+            "mensaje": "Instructor creado con éxito",
+            "id": nuevo_instructor.id,
+            "username": generated_username,  # Esto es lo que usará para entrar
+            "password": generated_password   # Token temporal
+        }
     except Exception as e:
         db.rollback()
         print(f"Error creando instructor: {e}")
