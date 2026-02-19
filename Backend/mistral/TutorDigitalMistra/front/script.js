@@ -170,6 +170,13 @@ let ttsSentenceBuffer = "";     // Buffer para construir oraciones desde el stre
 let ttsAborted = false;         // Flag para abortar el pipeline
 let ttsOnEndCallback = null;    // Callback final cuando todo termina
 let ttsChunkIndex = 0;          // Índice para tracking
+let lipSyncInterval = null;      // Intervalo para sincronización de boca
+let lastViseme = -1;            // Para evitar envíos redundantes a Unity
+
+// --- Optimizaciones de Rendimiento ---
+let lastUpdateBotTime = 0;
+let updateBotFrameId = null;
+let scrollToBottomPending = false;
 // --- CONFIGURACIÓN DE SUBTÍTULOS Y EMOCIONES ---
 let botWordQueue = []; // Para modo sin TTS: guardará objetos {type: 'tag'|'word', value: '...'}
 let isShowingSubtitle = false;
@@ -688,27 +695,61 @@ function addMessage(text, role) {
 function showTyping() {
     const id = `msg-${Date.now()}`;
     const div = document.createElement('div');
-    div.className = 'message bot';
+    div.className = 'message bot typing-message';
     div.id = id;
-    div.innerHTML = `<div class="message-content">...</div>`;
+    div.innerHTML = `
+        <div class="message-content">
+            <div class="typing-indicator">
+                <span></span><span></span><span></span>
+            </div>
+        </div>`;
     chatContainer.appendChild(div);
     scrollToBottom();
     return id;
 }
 
+/**
+ * Actualiza el mensaje del bot de forma optimizada (Throttling con rAF)
+ * Evita que el navegador colapse al parsear Markdown miles de veces por segundo.
+ */
 function updateBotMessage(id, cleanText) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const content = el.querySelector('.message-content');
-    // Limpiar etiquetas de emoción durante el streaming
-    const textToDisplay = cleanText; // quiero desactivar el ocultado de etiquetas
+    if (updateBotFrameId) cancelAnimationFrame(updateBotFrameId);
 
-    content.innerHTML = typeof marked !== 'undefined' ? marked.parse(textToDisplay) : textToDisplay;
-    scrollToBottom();
+    updateBotFrameId = requestAnimationFrame(() => {
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        // Si es el primer contenido real, quitar clase de typing
+        if (el.classList.contains('typing-message')) {
+            el.classList.remove('typing-message');
+        }
+
+        const content = el.querySelector('.message-content');
+
+        // Solo parsear marked si hay texto real para evitar el lag de O(N^2) durante el streaming.
+        content.innerHTML = typeof marked !== 'undefined' ? marked.parse(cleanText) : cleanText;
+
+        scrollToBottom();
+        updateBotFrameId = null;
+    });
 }
 
 function removeTyping(id) { document.getElementById(id)?.remove(); }
-function scrollToBottom() { setTimeout(() => { chatContainer.scrollTop = chatContainer.scrollHeight; }, 50); }
+
+/**
+ * Scroll optimizado al final del chat.
+ */
+function scrollToBottom() {
+    if (scrollToBottomPending) return;
+    scrollToBottomPending = true;
+
+    // Usar microtarea para asegurar que el DOM se ha actualizado
+    requestAnimationFrame(() => {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        scrollToBottomPending = false;
+    });
+}
+
 function autoResizeInput() { userInput.style.height = 'auto'; userInput.style.height = userInput.scrollHeight + 'px'; }
 
 
@@ -1069,12 +1110,63 @@ function playTTSChunk(chunk) {
             playNextTTSChunk();
         });
 
-        audio.play().catch(err => {
+        audio.play().then(() => {
+            // Iniciar LipSync sincronizado con este chunk
+            startLipSync(audio, chunk.text);
+        }).catch(err => {
             console.error(`[TTS Chunk ${chunk.id}] Error play():`, err);
             resolve();
             playNextTTSChunk();
         });
     });
+}
+
+/**
+ * Sistema de LipSync en tiempo real. 
+ * Analiza el texto del chunk y mueve la boca según la letra que suena en cada momento.
+ */
+function startLipSync(audio, text) {
+    if (!text || text.length === 0) return;
+
+    // Mapa de Visemas (Formas de la boca) para español
+    // 0: Cerrado/Silencio, 1: A, 2: E, 3: I, 4: O, 5: U, 6: Consonantes
+    const CHAR_MAP = {
+        'a': 1, 'á': 1,
+        'e': 2, 'é': 2,
+        'i': 3, 'í': 3, 'y': 3,
+        'o': 4, 'ó': 4,
+        'u': 5, 'ú': 5, 'w': 5,
+        'm': 0, 'b': 0, 'p': 0,
+        ' ': 0, '.': 0, ',': 0, '?': 0, '!': 0
+    };
+
+    if (lipSyncInterval) clearInterval(lipSyncInterval);
+    lastViseme = -1;
+
+    lipSyncInterval = setInterval(() => {
+        if (!audio || audio.paused || audio.ended || ttsAborted) {
+            clearInterval(lipSyncInterval);
+            if (window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetViseme', 0);
+            return;
+        }
+
+        // Calcular qué carácter toca decir según el progreso del audio
+        const progress = audio.currentTime / audio.duration;
+        const charIndex = Math.floor(progress * text.length);
+        const char = text[charIndex]?.toLowerCase();
+
+        // Determinar visema (por defecto 6 si es consonante no mapeada)
+        let viseme = 0;
+        if (char) {
+            viseme = (CHAR_MAP[char] !== undefined) ? CHAR_MAP[char] : 6;
+        }
+
+        // Solo enviar mensaje si la forma de la boca ha cambiado
+        if (viseme !== lastViseme && window.unityInstance) {
+            window.unityInstance.SendMessage('Tutor', 'SetViseme', viseme);
+            lastViseme = viseme;
+        }
+    }, 40); // 25 fps para la animación de la boca
 }
 
 /**
@@ -1164,6 +1256,9 @@ function stopTTS() {
     botIsSpeaking = false;
 
     // Resetear el flag de abort para la próxima vez
+    if (lipSyncInterval) clearInterval(lipSyncInterval);
+    if (window.unityInstance) window.unityInstance.SendMessage('Tutor', 'SetViseme', 0);
+
     setTimeout(() => { ttsAborted = false; }, 50);
 }
 

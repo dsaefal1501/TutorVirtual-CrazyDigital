@@ -60,6 +60,7 @@ public class TutorController : MonoBehaviour
 	public string animVocalA = "A";
 	public string animVocalE = "E";
 	public string animVocalO = "O";
+	public string aminVocalR = "R";
 	public string animSilencio = "Empty";
 	public int mouthLayerIndex = 2; // CAPA DE LA BOCA (Ajustar en Inspector)
 	public float velocidadLabios = 0.1f;
