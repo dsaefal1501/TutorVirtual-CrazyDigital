@@ -270,6 +270,7 @@ async function loadLicenses() {
             return;
         }
 
+        tbody.innerHTML = '';
         data.forEach(lic => {
             const tr = document.createElement('tr');
             const isActive = lic.activa;

@@ -949,24 +949,35 @@ def delete_instructor(user_id: int, db: Session = Depends(get_db)):
             db.delete(alumno)
         
         # ---------------------------------------------------------
-        # 2. BORRADO DE LIBROS HUÉRFANOS (Exclusivos de esta licencia)
+        # 2. BORRADO DE LIBROS ASOCIADOS A ESTA LICENCIA
         # ---------------------------------------------------------
-        # Solo borrar libros si vamos a borrar la licencia, o si ya no tienen uso
-        enrollments_licencia = db.query(modelos.Enrollment).filter(modelos.Enrollment.licencia_id == licencia_id).all()
-        libros_ids_licencia = list(set([e.libro_id for e in enrollments_licencia]))
+        # Ahora los libros tienen licencia_id directa. Obtenemos todos los de esta licencia.
+        libros_licencia = db.query(modelos.Libro).filter(modelos.Libro.licencia_id == licencia_id).all()
+        libros_ids = [l.id for l in libros_licencia]
         
-        for lid in libros_ids_licencia:
-            # Contar usos en otras licencias
-            otros_usos = db.query(modelos.Enrollment).filter(
-                modelos.Enrollment.libro_id == lid, 
-                modelos.Enrollment.licencia_id != licencia_id
-            ).count()
-            
-            if otros_usos == 0:
-                # Si solo se usa aquí, borrar libro completo
+        # También buscar libros referenciados vía Enrollment por si acaso hubiera residuos
+        enrollments_licencia = db.query(modelos.Enrollment).filter(modelos.Enrollment.licencia_id == licencia_id).all()
+        libros_ids_enroll = [e.libro_id for e in enrollments_licencia]
+        
+        libros_ids_totales = list(set(libros_ids + libros_ids_enroll))
+        
+        for lid in libros_ids_totales:
+            # Si vamos a borrar la licencia (porque no hay otros instructores),
+            # borramos el libro sin dudar. Si no, solo si no se usa en otras licencias.
+            if should_delete_license:
                 rag_service.eliminar_libro_completo(db, lid)
+            else:
+                # Contar usos en otras licencias
+                otros_usos = db.query(modelos.Enrollment).filter(
+                    modelos.Enrollment.libro_id == lid, 
+                    modelos.Enrollment.licencia_id != licencia_id
+                ).count()
+                
+                # También verificar si el libro pertenece directamente a otra licencia (aunque esto no debería pasar en este modelo)
+                if otros_usos == 0:
+                    rag_service.eliminar_libro_completo(db, lid)
 
-        # Borrar Enrollments restantes de la licencia (instructor, etc)
+        # Borrar Enrollments restantes de la licencia
         db.query(modelos.Enrollment).filter(modelos.Enrollment.licencia_id == licencia_id).delete()
 
         # ---------------------------------------------------------
