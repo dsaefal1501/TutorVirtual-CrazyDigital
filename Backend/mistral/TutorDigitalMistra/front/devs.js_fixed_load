@@ -1,0 +1,99 @@
+
+// ---- LIST INSTRUCTORS ----
+async function loadInstructors() {
+    const tableBody = document.getElementById('instructorsTableBody');
+    if (!tableBody) return;
+
+    try {
+        const res = await fetch(`${API_URL}/dev/instructors`);
+        if (!res.ok) throw new Error("Error al cargar lista");
+
+        const instructors = await res.json();
+        
+        // --- SMART UPDATE: Only rebuild if data actually changed ---
+        const currentDataStr = JSON.stringify(instructors);
+        if (currentDataStr === lastInstructorsData) {
+            // Data hasn't changed, but refresh sub-tables if open
+            instructors.forEach(instruct => {
+                if (openLicenseIds.has(instruct.licencia_id)) {
+                    fetchAndRenderStudents(instruct.licencia_id);
+                }
+            });
+            loadLicenses();
+            return;
+        }
+        lastInstructorsData = currentDataStr;
+
+        if (instructors.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No hay instructores registrados.</td></tr>';
+            loadLicenses();
+            return;
+        }
+
+        tableBody.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+
+        instructors.forEach(instruct => {
+            const row = document.createElement('tr');
+            const name = instruct.nombre || '-';
+            const email = instruct.email || '-';
+            const licId = instruct.licencia_id;
+            const isExpanded = openLicenseIds.has(licId);
+
+            row.innerHTML = `
+                <td>#${instruct.id}</td>
+                <td><span style="font-weight:600; color:#fff">${name}</span></td>
+                <td>${email}</td>
+                <td><span class="badge" style="background:rgba(59,130,246,0.2); color:#60a5fa; padding:4px 8px; border-radius:4px; font-size:0.75rem;">${instruct.rol}</span></td>
+                <td>
+                    <button class="btn-icon view-students ${isExpanded ? 'active' : ''}" title="Ver Alumnos" onclick="toggleStudents(this, ${licId})" style="margin-right:8px; color:#34d399; background:rgba(16,185,129,0.1);">
+                        <i class="bi ${isExpanded ? 'bi-chevron-up' : 'bi-people'}"></i>
+                    </button>
+                    <button class="btn-icon delete" title="Eliminar" onclick="deleteInstructor(${instruct.id}, '${name}')">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            `;
+            fragment.appendChild(row);
+
+            const subRow = document.createElement('tr');
+            subRow.className = 'sub-table-row';
+            subRow.style.display = isExpanded ? 'table-row' : 'none';
+            subRow.innerHTML = `
+                <td colspan="5" style="padding:0; background:rgba(255,255,255,0.02);">
+                    <div class="sub-table-container" style="padding:15px 20px; border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:10px;"><i class="bi bi-person-badge"></i> Alumnos asociados a Licencia #${licId}</div>
+                        <table class="data-table" style="width:100%; font-size:0.85rem;">
+                            <thead>
+                                <tr style="background:rgba(0,0,0,0.2);">
+                                    <th style="padding:8px;">ID</th>
+                                    <th style="padding:8px;">Nombre</th>
+                                    <th style="padding:8px;">Usuario</th>
+                                    <th style="padding:8px;">Token</th>
+                                    <th style="padding:8px;">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="students-list-${licId}">
+                            </tbody>
+                        </table>
+                    </div>
+                </td>
+            `;
+            fragment.appendChild(subRow);
+
+        });
+        tableBody.appendChild(fragment);
+
+        instructors.forEach(instruct => {
+            if (openLicenseIds.has(instruct.licencia_id)) {
+                fetchAndRenderStudents(instruct.licencia_id);
+            }
+        });
+
+    } catch (e) {
+        console.error(e);
+        tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--error-text)">Error: ${e.message}</td></tr>`;
+    }
+
+    loadLicenses();
+}
