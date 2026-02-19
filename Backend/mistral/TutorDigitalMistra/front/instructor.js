@@ -200,7 +200,7 @@ if (uploadBtn) {
 
             updateStatusText('Subiendo archivo al servidor...');
 
-            const res = await fetch(`${API_URL}/upload/syllabus?account_id=demo`, {
+            const res = await fetch(`${API_URL}/upload/syllabus?account_id=${LICENCIA_ID}&licencia_id=${LICENCIA_ID}`, {
                 method: 'POST',
                 body: fd
             });
@@ -245,8 +245,8 @@ async function pollProcessingConfig() {
     return new Promise((resolve, reject) => {
         const interval = setInterval(async () => {
             try {
-                // Poll progress for account 'demo'
-                const res = await fetch(`${API_URL}/upload/progress/demo`);
+                // Poll progress for current license
+                const res = await fetch(`${API_URL}/upload/progress/${LICENCIA_ID}`);
                 if (!res.ok) return;
 
                 const data = await res.json();
@@ -334,7 +334,7 @@ async function checkSyllabusStatus(force = false) {
     if (force) container.innerHTML = '<div class="text-center mt-5"><div class="spinner-border text-primary"></div></div>';
 
     try {
-        const res = await fetch(`${API_URL}/syllabus`);
+        const res = await fetch(`${API_URL}/syllabus?licencia_id=${LICENCIA_ID}`);
         if (!res.ok) throw new Error("Error API");
         syllabusData = await res.json();
         renderSyllabusTree(syllabusData);
@@ -557,10 +557,10 @@ async function loadUploads() {
     if (!list.children.length) list.innerHTML = '<div class="spinner-border text-primary"></div>';
 
     try {
-        const res = await fetch(`${API_URL}/libros`);
+        const res = await fetch(`${API_URL}/libros?licencia_id=${LICENCIA_ID}`);
         const books = await res.json();
 
-        const progRes = await fetch(`${API_URL}/upload/progress/demo`);
+        const progRes = await fetch(`${API_URL}/upload/progress/${LICENCIA_ID}`);
         const progData = await progRes.json();
 
         // Re-render

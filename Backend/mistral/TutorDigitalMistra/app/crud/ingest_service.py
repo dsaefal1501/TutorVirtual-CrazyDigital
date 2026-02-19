@@ -87,7 +87,7 @@ def generar_estructura_temario(texto_indice: str) -> List[Dict]:
 # 3. PROCESO PRINCIPAL
 # ============================================================================
 
-def procesar_archivo_temario(db: Session, archivo_bytes: bytes, filename: str, account_id: str, progress_callback=None, titulo: str = None):
+def procesar_archivo_temario(db: Session, archivo_bytes: bytes, filename: str, account_id: str, progress_callback=None, titulo: str = None, licencia_id: int = None):
     """
     Flujo completo de ingestión con soporte para Libros y Lista Enlazada.
     """
@@ -107,7 +107,8 @@ def procesar_archivo_temario(db: Session, archivo_bytes: bytes, filename: str, a
             titulo=titulo_libro,
             descripcion=f"Subido el {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             pdf_path=f"uploads/{account_id}/{filename}",
-            activo=True
+            activo=True,
+            licencia_id=licencia_id
         )
         db.add(libro)
         db.commit() # COMMIT INMEDIATO para asegurar que el libro existe

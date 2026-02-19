@@ -278,9 +278,16 @@ def obtener_siguiente_contenido(db: Session, usuario_id: int, sesion_id: int) ->
     sesion = db.query(SesionChat).filter(SesionChat.id == sesion_id).first()
     temario_id = sesion.temario_id if sesion and sesion.temario_id else None
 
-    # Si no hay temario asignado, buscar el primero disponible
+    # Identificar licencia del alumno
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    licencia_id = usuario.licencia_id if usuario else None
+
+    # Si no hay temario asignado, buscar el primero disponible para ESTA LICENCIA
     if not temario_id:
-        primer_tema = db.query(Temario).filter(Temario.activo == True).order_by(Temario.orden.asc()).first()
+        primer_tema = db.query(Temario).join(Libro).filter(
+            Temario.activo == True,
+            Libro.licencia_id == licencia_id
+        ).order_by(Temario.orden.asc()).first()
         if primer_tema:
             temario_id = primer_tema.id
             if sesion:
@@ -327,9 +334,10 @@ def obtener_siguiente_contenido(db: Session, usuario_id: int, sesion_id: int) ->
                 # No hay más bloques en este tema → pasar al siguiente tema
                 tema_actual = db.query(Temario).filter(Temario.id == temario_id).first()
                 if tema_actual:
-                    siguiente_tema = db.query(Temario).filter(
+                    siguiente_tema = db.query(Temario).join(Libro).filter(
                         Temario.orden > tema_actual.orden,
-                        Temario.activo == True
+                        Temario.activo == True,
+                        Libro.licencia_id == licencia_id
                     ).order_by(Temario.orden.asc()).first()
                     
                     if siguiente_tema:
@@ -405,9 +413,17 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
     
     # --- RAMA A: MODO UBICACIÓN ---
     if intencion == "UBICACION":
-        temario_id = sesion.temario_id if sesion.temario_id else 1
-        ubicacion = _obtener_info_ubicacion(db, temario_id)
-        respuesta_texto = f"[NoneBrows] {ubicacion}"
+        temario_id = sesion.temario_id
+        if not temario_id:
+             # Fallback: primer tema de su licencia
+             primer = db.query(Temario).join(Libro).filter(Libro.licencia_id == licencia_id).order_by(Temario.orden).first()
+             temario_id = primer.id if primer else None
+        
+        if temario_id:
+            ubicacion = _obtener_info_ubicacion(db, temario_id)
+            respuesta_texto = f"[NoneBrows] {ubicacion}"
+        else:
+            respuesta_texto = "[NoneBrows] No tienes ningún temario asignado todavía."
         fuentes = ["Navegación jerárquica"]
     
     # --- RAMA B: MODO TUTOR SECUENCIAL (Enseñar palabra a palabra) ---
@@ -460,9 +476,12 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
     
     # --- RAMA C: MODO RAG "MEGA CONTEXTO" (Estructura Global + Tema Actual + Búsqueda) ---
     else:
-        # A. OBTENER ESTRUCTURA DEL LIBRO (Global Awareness)
+        # A. OBTENER ESTRUCTURA DEL LIBRO (Global Awareness - Filtrado por Licencia)
         # Esto le permite saber "dónde está" en el mapa general
-        temas_global = db.query(Temario).filter(Temario.activo == True).order_by(Temario.orden).all()
+        temas_global = db.query(Temario).join(Libro).filter(
+            Temario.activo == True,
+            Libro.licencia_id == licencia_id
+        ).order_by(Libro.id, Temario.orden).all()
         estructura_txt = "INDICE DEL LIBRO:\n" + "\n".join([f"- {t.nombre}" for t in temas_global])
         
         docs_map = {} # Usamos dict para evitar duplicados por ID
@@ -482,13 +501,14 @@ def preguntar_al_tutor(db: Session, pregunta: PreguntaUsuario) -> RespuestaTutor
         vector = generar_embedding(db, pregunta.texto)
         
         docs_raw = db.execute(
-            text("SELECT * FROM buscar_contenido_hibrido(:q_text, :q_emb, :thresh, :limit, :libro_id)"),
+            text("SELECT * FROM buscar_contenido_hibrido(:q_text, :q_emb, :thresh, :limit, :libro_id, :licencia_id)"),
             {
                 "q_text": pregunta.texto,
                 "q_emb": str(vector),
                 "thresh": 0.25, 
-                "limit": 15, # Reducimos un poco el límite vectorial ya que metemos todo el tema actual
-                "libro_id": None
+                "limit": 15, 
+                "libro_id": None,
+                "licencia_id": licencia_id
             }
         ).all()
         
@@ -613,13 +633,13 @@ def preguntar_al_tutor_stream(db: Session, pregunta: PreguntaUsuario):
     alumno_nombre = alumno.alias if alumno and alumno.alias else (alumno.nombre if alumno else "Alumno")
     alias_context = f"SITUACIÓN: El alumno con el que hablas se llama {alumno_nombre}. Ya le conoces."
     
-    # Buscar contexto RAG
+    # Buscar contexto RAG (Filtrado por Licencia)
     vector = generar_embedding(db, pregunta.texto)
-    docs = db.execute(
-        select(BaseConocimiento).order_by(
-            BaseConocimiento.embedding.cosine_distance(vector)
-        ).limit(5)
-    ).scalars().all()
+    docs = db.query(BaseConocimiento).join(Temario).join(Libro).filter(
+        Libro.licencia_id == alumno.licencia_id
+    ).order_by(
+        BaseConocimiento.embedding.cosine_distance(vector)
+    ).limit(5).all()
     
     contexto_str = _construir_contexto_enriquecido(db, docs)
     
@@ -720,12 +740,18 @@ def sincronizar_temario_a_conocimiento(db: Session) -> int:
 # 8. UTILIDADES PARA EL PANEL DE INSTRUCTOR
 # ============================================================================
 
-def obtener_jerarquia_temario(db: Session) -> List[Dict]:
+def obtener_jerarquia_temario(db: Session, licencia_id: int = None) -> List[Dict]:
     """
     Devuelve la lista completa de temas ordenada para construir el árbol UI.
     Incluye el título del libro asociado.
+    Opcionalmente filtra por licencia_id.
     """
-    temas = db.query(Temario).options(joinedload(Temario.libro)).order_by(Temario.nivel, Temario.orden).all()
+    query = db.query(Temario).options(joinedload(Temario.libro))
+    
+    if licencia_id:
+        query = query.join(Libro).filter(Libro.licencia_id == licencia_id)
+        
+    temas = query.order_by(Temario.nivel, Temario.orden).all()
     if not temas:
         return []
     
@@ -742,7 +768,8 @@ def obtener_jerarquia_temario(db: Session) -> List[Dict]:
         })
     
     # Mantenemos el orden original por ID o nivel para la estabilidad
-    resultado.sort(key=lambda x: (x["libro_id"] if x["libro_id"] else 0, x["nivel"], x["orden"]))
+    # Usamos 0 como fallback para libro_id si es None para que la ordenación no falle
+    resultado.sort(key=lambda x: (x["libro_id"] if x["libro_id"] is not None else 0, x["nivel"], x["orden"]))
     return resultado
 
 

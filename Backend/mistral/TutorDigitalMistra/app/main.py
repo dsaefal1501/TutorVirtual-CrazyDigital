@@ -3,7 +3,7 @@ import secrets
 import string
 import logging
 from collections import deque
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -114,7 +114,7 @@ def test():
     return {"mensaje": "Test exitoso"}
 
 
-def _procesar_archivo_en_thread(content: bytes, filename: str, account_id: str, title: str = None):
+def _procesar_archivo_en_thread(content: bytes, filename: str, account_id: str, title: str = None, licencia_id: int = None):
     """
     Wrapper para procesar archivo en un thread separado.
     Recibe los bytes del archivo ya leídos para evitar problemas de I/O en threads.
@@ -139,7 +139,7 @@ def _procesar_archivo_en_thread(content: bytes, filename: str, account_id: str, 
         progress_callback("Iniciando...", 0)
         
         # Pasamos bytes y nombre de archivo al servicio
-        result = ingest_service.procesar_archivo_temario(db, content, filename, account_id, progress_callback=progress_callback, titulo=title)
+        result = ingest_service.procesar_archivo_temario(db, content, filename, account_id, progress_callback=progress_callback, titulo=title, licencia_id=licencia_id)
         
         # Final success state
         upload_progress[account_id] = {
@@ -170,7 +170,8 @@ async def upload_syllabus(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...), 
     account_id: str = Query(..., description="ID de la cuenta enviado en la URL"),
-    title: str = Form(None)
+    title: str = Form(None),
+    licencia_id: Optional[int] = Query(None)
 ):
     """
     Sube el libro entero PDF. 
@@ -185,7 +186,7 @@ async def upload_syllabus(
         filename = file.filename
         
         # Encolar tarea en segundo plano
-        background_tasks.add_task(_procesar_archivo_en_thread, content, filename, account_id, title)
+        background_tasks.add_task(_procesar_archivo_en_thread, content, filename, account_id, title, licencia_id)
         
         return {
             "status": "processing", 
@@ -322,19 +323,22 @@ async def text_to_speech(
 # ============================================================================
 
 @app.get("/libros", response_model=List[schemas.LibroResponse])
-def get_libros(db: Session = Depends(get_db)):
+def get_libros(licencia_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
     """
-    Devuelve la lista de libros subidos.
+    Devuelve la lista de libros subidos, opcionalmente filtrada por licencia.
     """
-    return db.query(modelos.Libro).order_by(modelos.Libro.fecha_creacion.desc()).all()
+    query = db.query(modelos.Libro)
+    if licencia_id:
+        query = query.filter(modelos.Libro.licencia_id == licencia_id)
+    return query.order_by(modelos.Libro.fecha_creacion.desc()).all()
 
 @app.get("/syllabus")
-def get_syllabus(db: Session = Depends(get_db)):
+def get_syllabus(licencia_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
     """
-    Devuelve la jerarquía completa del temario (para el árbol del instructor).
+    Devuelve la jerarquía completa del temario, opcionalmente filtrada por licencia.
     """
     try:
-        return rag_service.obtener_jerarquia_temario(db)
+        return rag_service.obtener_jerarquia_temario(db, licencia_id=licencia_id)
     except Exception as e:
         print(f"Error obteniendo syllabus: {e}")
         raise HTTPException(status_code=500, detail=str(e))
