@@ -218,8 +218,8 @@ MonoBehaviour:
     y: 0
     width: 765
     height: 691
-  m_MinSize: {x: 200, y: 200}
-  m_MaxSize: {x: 4000, y: 4000}
+  m_MinSize: {x: 202, y: 226}
+  m_MaxSize: {x: 4002, y: 4026}
   m_ActualView: {fileID: 17}
   m_Panes:
   - {fileID: 17}
@@ -357,7 +357,7 @@ MonoBehaviour:
   m_Pos:
     serializedVersion: 2
     x: 0
-    y: 43
+    y: 0
     width: 1920
     height: 36
   m_SerializedDataModeController:
@@ -584,12 +584,12 @@ MonoBehaviour:
       displayed: 1
       id: Play Mode Controls
       index: 9
-      contents: '{"m_Layout":4,"m_Collapsed":false,"m_Folded":false,"m_Floating":false,"m_FloatingSnapOffset":{"x":-939.0,"y":-36.0},"m_SnapOffsetDelta":{"x":0.0,"y":0.0},"m_FloatingSnapCorner":3,"m_Size":{"x":0.0,"y":0.0},"m_SizeOverridden":false}'
+      contents: '{"m_Layout":4,"m_Collapsed":false,"m_Folded":false,"m_Floating":false,"m_FloatingSnapOffset":{"x":444.0,"y":0.0},"m_SnapOffsetDelta":{"x":0.0,"y":0.0},"m_FloatingSnapCorner":0,"m_Size":{"x":0.0,"y":0.0},"m_SizeOverridden":false}'
       floating: 0
       collapsed: 0
-      snapOffset: {x: -939, y: -36}
+      snapOffset: {x: 444, y: 0}
       snapOffsetDelta: {x: 0, y: 0}
-      snapCorner: 3
+      snapCorner: 0
       layout: 4
       size: {x: 0, y: 0}
       sizeOverridden: 0
@@ -636,8 +636,8 @@ MonoBehaviour:
     m_TextWithWhitespace: "Game\u200B"
   m_Pos:
     serializedVersion: 2
-    x: 1268
-    y: 686
+    x: 1
+    y: 631
     width: 651
     height: 420
   m_SerializedDataModeController:
@@ -740,7 +740,7 @@ MonoBehaviour:
   m_Pos:
     serializedVersion: 2
     x: 0
-    y: 79
+    y: 24
     width: 502
     height: 665
   m_SerializedDataModeController:
@@ -759,8 +759,7 @@ MonoBehaviour:
   m_SceneHierarchy:
     m_TreeViewState:
       scrollPos: {x: 0, y: 0}
-      m_SelectedIDs:
-      - m_Data: 45174
+      m_SelectedIDs: []
       m_LastClickedID:
         m_Data: 0
       m_ExpandedIDs:
@@ -859,8 +858,8 @@ MonoBehaviour:
     m_TextWithWhitespace: "Scene\u200B"
   m_Pos:
     serializedVersion: 2
-    x: 503
-    y: 79
+    x: 504
+    y: 24
     width: 763
     height: 665
   m_SerializedDataModeController:
@@ -1363,7 +1362,7 @@ MonoBehaviour:
   m_AudioPlay: 0
   m_DebugDrawModesUseInteractiveLightBakingData: 0
   m_Position:
-    m_Target: {x: -0.3159054, y: 1.79899, z: 1.3471328}
+    m_Target: {x: 0.47875857, y: 1.6944343, z: 2.4626534}
     speed: 2
     m_Value: {x: -0.3159054, y: 1.79899, z: 1.3471328}
   m_RenderMode: 0
@@ -1411,11 +1410,11 @@ MonoBehaviour:
     m_GridAxis: 1
     m_gridOpacity: 0.5
   m_Rotation:
-    m_Target: {x: -0.025225116, y: -0.09729698, z: 0.008413164, w: 0.9949359}
+    m_Target: {x: 0.0140575385, y: 0.082823455, z: 0.009703087, w: 0.9964577}
     speed: 2
-    m_Value: {x: -0.025224216, y: -0.09729352, z: 0.008412864, w: 0.99490047}
+    m_Value: {x: 0.025225114, y: 0.097296976, z: -0.008413163, w: -0.9949359}
   m_Size:
-    m_Target: 0.8660254
+    m_Target: 1.5116501
     speed: 2
     m_Value: 0.8660254
   m_Ortho:
@@ -1560,11 +1559,7 @@ MonoBehaviour:
     - m_Data: 45536
     m_LastClickedID:
       m_Data: 45536
-    m_ExpandedIDs:
-    - m_Data: 0
-    - m_Data: 45312
-    - m_Data: 1000000000
-    - m_Data: 2147483647
+    m_ExpandedIDs: []
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name: 
@@ -1595,11 +1590,7 @@ MonoBehaviour:
     m_SelectedIDs: []
     m_LastClickedID:
       m_Data: 0
-    m_ExpandedIDs:
-    - m_Data: 0
-    - m_Data: 45312
-    - m_Data: 1000000000
-    - m_Data: 2147483647
+    m_ExpandedIDs: []
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name: 
@@ -1760,7 +1751,7 @@ MonoBehaviour:
   m_Pos:
     serializedVersion: 2
     x: 0
-    y: 770
+    y: 715
     width: 1267
     height: 336
   m_SerializedDataModeController:
@@ -1976,8 +1967,8 @@ MonoBehaviour:
     m_TextWithWhitespace: "Inspector\u200B"
   m_Pos:
     serializedVersion: 2
-    x: 1268
-    y: 79
+    x: 1
+    y: 24
     width: 651
     height: 581
   m_SerializedDataModeController:

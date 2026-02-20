@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="0; url=Backend/mistral/TutorDigitalMistra/front/login.html">
+    <title>Redirigiendo a Login...</title>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #0f172a;
+            /* color de dark mode elegante */
+            color: #e2e8f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            flex-direction: column;
+        }
+
+        .loader {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left-color: #38bdf8;
+            /* Azul cyan moderno */
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 24px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        p {
+            font-size: 1.125rem;
+            color: #94a3b8;
+            text-align: center;
+        }
+
+        a {
+            color: #38bdf8;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        a:hover {
+            color: #7dd3fc;
+            text-decoration: underline;
+        }
+    </style>
+    <script>
+        // Redirigimos al script de login
+        window.location.replace('Backend/mistral/TutorDigitalMistra/front/login.html');
+    </script>
+</head>
+
+<body>
+    <div class="loader"></div>
+    <p>Conectando con la plataforma educativa...<br><br>
+        <a href="Backend/mistral/TutorDigitalMistra/front/login.html">Haz clic aquí si no eres redirigido.</a>
+    </p>
+</body>
+
+</html>
